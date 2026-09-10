@@ -1,30 +1,35 @@
 // ==UserScript==
-// @name         Twitter/X Media Downloader
-// @name:zh-CN   Twitter/X 媒体下载器
-// @description        One-click download of images/videos from Twitter/X, with custom filenames and history.
-// @description:zh-CN  一键下载 Twitter/X 图片和视频，支持自定义文件名和下载历史记录。
-// @author      ShanksSU
-// @namespace    https://github.com/ShanksSU/twitter-media-downloader
-// @version     0.5.2
-// @match       https://twitter.com/*
-// @match       https://x.com/*
-// @icon        https://www.google.com/s2/favicons?sz=64&domain=x.com
-// @run-at      document-idle
-// @connect     pbs.twimg.com
-// @connect     video.twimg.com
-// @connect     *.twimg.com
-// @grant       GM_setValue
-// @grant       GM_getValue
-// @grant       GM_download
-// @grant       GM_addStyle
-// @grant       GM_xmlhttpRequest
-// @grant       GM.setValue
-// @grant       GM.getValue
-// @grant       GM.download
-// @license     MIT
-// @downloadURL https://update.greasyfork.org/scripts/571423/TwitterX%20Media%20Downloader.user.js
-// @updateURL https://update.greasyfork.org/scripts/571423/TwitterX%20Media%20Downloader.meta.js
+// @name         TXD-s-Twitter-or-X-s-Downloader
+// @name:zh-CN   TXD-是-推特-或-X-的-下载器
+// @namespace    https://github.com/ONO-s-Not-Organization/TXD-s-Twitter-or-X-s-Downloader
+// @version      26.09.11
+// @description  One-click download of images/videos from Twitter/X, with custom filenames and history.
+// @description:zh-CN 一键下载 Twitter/X 图片和视频，支持自定义文件名和下载历史记录。
+// @author       ONO's'Not Organization
+// @homepageURL  https://github.com/ONO-s-Not-Organization/TXD-s-Twitter-or-X-s-Downloader
+// @supportURL   https://github.com/ONO-s-Not-Organization/TXD-s-Twitter-or-X-s-Downloader/issues
+// @license      AGPL-3.0
+// @match        https://twitter.com/*
+// @match        https://x.com/*
+// @match        https://mobile.twitter.com/*
+// @match        https://mobile.x.com/*
+// @icon         https://www.google.com/s2/favicons?sz=64&domain=x.com
+// @run-at       document-idle
+// @connect      twimg.com
+// @grant        GM_setValue
+// @grant        GM_getValue
+// @grant        GM_download
+// @grant        GM_addStyle
+// @grant        GM_xmlhttpRequest
+// @grant        GM.setValue
+// @grant        GM.getValue
+// @grant        GM.download
+// @downloadURL  https://raw.githubusercontent.com/ONO-s-Not-Organization/TXD-s-Twitter-or-X-s-Downloader/main/TXD.user.js
+// @updateURL    https://raw.githubusercontent.com/ONO-s-Not-Organization/TXD-s-Twitter-or-X-s-Downloader/main/TXD.user.js
 // ==/UserScript==
+//
+// Based on ShanksSU: https://github.com/ShanksSU/twitter-media-downloader
+// Original code remains licensed under MIT. Modifications and this combined work are licensed under AGPL-3.0.
 
 class Config {
     static AUTH_TOKEN = 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA';
