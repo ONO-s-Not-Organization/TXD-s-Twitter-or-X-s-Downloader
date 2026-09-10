@@ -5,14 +5,13 @@
 // @description:zh-CN  一键下载 Twitter/X 图片和视频，支持自定义文件名和下载历史记录。
 // @author      ShanksSU
 // @namespace    https://github.com/ShanksSU/twitter-media-downloader
-// @version     0.5.1
+// @version     0.5.2
 // @match       https://twitter.com/*
 // @match       https://x.com/*
 // @icon        https://www.google.com/s2/favicons?sz=64&domain=x.com
 // @run-at      document-idle
 // @connect     pbs.twimg.com
 // @connect     video.twimg.com
-// @connect     ton.twitter.com
 // @connect     *.twimg.com
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -28,35 +27,36 @@
 // ==/UserScript==
 
 class Config {
-    static VERSION = '0.5.1';
     static AUTH_TOKEN = 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA';
     static defaultFilename = '{user-name}(@{user-id})_{index}';
     static HISTORY_LIMIT = 500;
     static DOWNLOAD_TIMEOUT_MS = 45000;
-    static MOBILE_GM_OPTIMISTIC_MS = 300;
     static DEFAULT_QUERY_ID = '2ICDjqPd81tulZcYrtpTuQ';
     static QUERY_ID_STORAGE_KEY = 'tmd_query_id';
     static BEARER_STORAGE_KEY = 'tmd_bearer';
 
     static language = {
         en: {
-            download: 'Download', completed: 'Download Completed', settings: 'Settings', history: 'Download Log',
+            download: 'Download', completed: 'Download Completed', started: 'Download started',
+            settings: 'Settings', history: 'Download Log',
             empty: 'No history yet.', unknown_date: 'Unknown Date', saved: 'Saved',
+            toggle_theme: 'Theme', language: 'Language', load_more: 'Load more',
+            theme_auto: 'Auto', theme_light: 'Light', theme_dark: 'Dark',
             toast_open_url: 'Opened media URL. Use system download or long-press to save.',
             errors: {
                 API_ERROR: 'API request failed',
                 API_EXPIRED: 'API expired, retrying…',
                 MEDIA_NOT_FOUND: 'No media found',
-                NO_URL: 'Media URL missing',
                 ERROR: 'Download failed',
-                DOWNLOAD_UNSUPPORTED: 'Download not supported',
-                TIMEOUT: 'Download timed out'
+                TIMEOUT: 'Download timed out',
+                PARTIAL: 'Some files failed to download'
             },
             dialog: {
-                title: 'Download Settings', save: 'Save', save_history: 'Remember download history',
+                title: 'Download Settings', save: 'Save', done: 'Done', save_history: 'Remember download history',
                 auto_bookmark: 'Auto Bookmark on Download', clear_history: 'Clear All History',
                 clear_confirm: 'Clear all download history?', pattern: 'File Name Pattern', preview: 'Preview:',
                 empty_pattern: 'Pattern cannot be empty.', reset: '(Reset)', shortcut: 'Keyboard Shortcut:',
+                del_confirm: 'Delete this record?', pattern_tags: 'Filename tags',
                 history_limit: 'History limit:', download_timeout: 'Download timeout:',
                 history_unlimited: 'Unlimited',
                 timeout_30s: '30 sec', timeout_45s: '45 sec', timeout_90s: '90 sec',
@@ -75,23 +75,26 @@ class Config {
             }
         },
         zh: {
-            download: '下载', completed: '下载完成', settings: '设置', history: '下载记录',
+            download: '下载', completed: '下载完成', started: '已开始下载',
+            settings: '设置', history: '下载记录',
             empty: '暂无记录。', unknown_date: '未知时间', saved: '已保存',
+            toggle_theme: '主题', language: '语言', load_more: '加载更多',
+            theme_auto: '跟随系统', theme_light: '浅色', theme_dark: '深色',
             toast_open_url: '已打开媒体链接，请用系统下载或长按保存。',
             errors: {
                 API_ERROR: '接口请求失败',
                 API_EXPIRED: '接口已过期，正在重试…',
                 MEDIA_NOT_FOUND: '未找到媒体',
-                NO_URL: '缺少媒体地址',
                 ERROR: '下载失败',
-                DOWNLOAD_UNSUPPORTED: '当前环境不支持下载',
-                TIMEOUT: '下载超时'
+                TIMEOUT: '下载超时',
+                PARTIAL: '部分文件下载失败'
             },
             dialog: {
-                title: '下载设置', save: '保存', save_history: '保存下载记录',
-                auto_bookmark: '下载时自动加入书签', clear_history: '(清除)',
+                title: '下载设置', save: '保存', done: '完成', save_history: '保存下载记录',
+                auto_bookmark: '下载时自动加入书签', clear_history: '清除全部记录',
                 clear_confirm: '确认要清除下载记录？', pattern: '文件名格式', preview: '预览:',
                 empty_pattern: '文件名格式不能为空。', reset: '(重置)', shortcut: '快捷键设定:',
+                del_confirm: '删除这条记录？', pattern_tags: '插入文件名标签',
                 history_limit: '历史保留:', download_timeout: '下载超时:',
                 history_unlimited: '不限制',
                 timeout_30s: '30秒', timeout_45s: '45秒', timeout_90s: '90秒',
@@ -114,57 +117,71 @@ class Config {
     static logIconUri = `data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'%3E%3C/path%3E%3Cpolyline points='14 2 14 8 20 8'%3E%3C/polyline%3E%3Cline x1='16' y1='13' x2='8' y2='13'%3E%3C/line%3E%3Cline x1='16' y1='17' x2='8' y2='17'%3E%3C/line%3E%3Cpolyline points='10 9 9 9 8 9'%3E%3C/polyline%3E%3C/svg%3E`;
 
     static media_btn_css = `
+        html.tmd-theme-light {
+            --tmd-bg: #FFFFFF; --tmd-surface: #F5F5F5; --tmd-on: #1C1B1F; --tmd-muted: #5F5F5F;
+            --tmd-outline: #E6E6E6; --tmd-primary: #1C1B1F; --tmd-on-primary: #FFFFFF;
+            --tmd-danger: #B3261E; --tmd-toast-bg: #1C1B1F; --tmd-toast-fg: #F5F5F5;
+        }
+        html.tmd-theme-dark {
+            --tmd-bg: #121212; --tmd-surface: #1C1C1C; --tmd-on: #F5F5F5; --tmd-muted: #A8A8A8;
+            --tmd-outline: #3A3A3A; --tmd-primary: #F5F5F5; --tmd-on-primary: #1C1B1F;
+            --tmd-danger: #F2B8B5; --tmd-toast-bg: #F5F5F5; --tmd-toast-fg: #1C1B1F;
+        }
         .tmd-down {margin-left: 12px; order: 99; position: relative;}
-        .tmd-down:hover > div > div > div > div {color: #FFD700;}
-        .tmd-down:hover > div > div > div > div > div {background-color: rgba(255, 215, 0, 0.1);}
-        .tmd-down:active > div > div > div > div > div {background-color: rgba(255, 215, 0, 0.2);}
-        .tmd-down:hover svg {color: #FFD700;}
-        .tmd-down:hover div:first-child:not(:last-child) {background-color: rgba(255, 215, 0, 0.1);}
-        .tmd-down:active div:first-child:not(:last-child) {background-color: rgba(255, 215, 0, 0.2);}
-        .tmd-down.tmd-media {position: absolute; right: 0;}
-        .tmd-down.tmd-media > div {display: flex; border-radius: 99px; margin: 2px;}
-        .tmd-down.tmd-media > div > div {display: flex; margin: 6px; color: #fff;}
+        .tmd-down:hover > div > div > div > div {color: var(--tmd-on, #1C1B1F);}
+        .tmd-down:hover > div > div > div > div > div {background-color: rgba(28, 27, 31, 0.08);}
+        .tmd-down:active > div > div > div > div > div {background-color: rgba(28, 27, 31, 0.12);}
+        .tmd-down:hover svg {color: var(--tmd-on, #1C1B1F);}
+        .tmd-down:hover div:first-child:not(:last-child) {background-color: rgba(28, 27, 31, 0.08);}
+        .tmd-down:active div:first-child:not(:last-child) {background-color: rgba(28, 27, 31, 0.12);}
+        .tmd-down.tmd-media,
+        .tmd-down.tmd-img {position: absolute; right: 0;}
+        .tmd-down.tmd-media > div,
+        .tmd-down.tmd-img > div {display: flex; border-radius: 99px; margin: 2px;}
+        .tmd-down.tmd-media > div > div,
+        .tmd-down.tmd-img > div > div {display: flex; margin: 6px; color: #fff;}
         .tmd-down.tmd-media:hover > div {background-color: rgba(255,255,255, 0.6);}
-        .tmd-down.tmd-media:hover > div > div {color: #FFD700;}
-        .tmd-down.tmd-media:not(:hover) > div > div {filter: drop-shadow(0 0 1px #000);}
+        .tmd-down.tmd-media:hover > div > div,
+        .tmd-down.tmd-img:hover > div > div {color: #1C1B1F;}
+        .tmd-down.tmd-media:not(:hover) > div > div,
+        .tmd-down.tmd-img:not(:hover) > div > div {filter: drop-shadow(0 0 1px #000);}
         .tmd-down g {display: none;}
         .tmd-down.download g.download, .tmd-down.completed g.completed, .tmd-down.exist g.completed, .tmd-down.loading g.loading,.tmd-down.failed g.failed {display: unset;}
-        .tmd-down.exist svg {color: #FFD700;}
-        .tmd-down.loading svg {animation: spin 1s linear infinite; color: #FFD700;}
+        .tmd-down.exist svg {color: #5F5F5F;}
+        .tmd-down.loading svg {animation: spin 1s linear infinite; color: #5F5F5F;}
         @keyframes spin {0% {transform: rotate(0deg);} 100% {transform: rotate(360deg);}}
         @keyframes tmd-pop-anim {
-            0% { transform: scale(0); opacity: 0; }
-            50% { transform: scale(1.3); opacity: 1; }
-            100% { transform: scale(1); }
+            0% { transform: scale(0.8); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
         }
         @keyframes tmd-burst-anim {
             0% {
                 box-shadow:
-                    0 -10px 0 0 #00ba7c, 7px -7px 0 0 #FFD700,
-                    10px 0 0 0 #00ba7c,  7px 7px 0 0 #FFD700,
-                    0 10px 0 0 #00ba7c,  -7px 7px 0 0 #FFD700,
-                    -10px 0 0 0 #00ba7c, -7px -7px 0 0 #FFD700;
+                    0 -8px 0 0 #00A86B, 6px -6px 0 0 #F9A825,
+                    8px 0 0 0 #00A86B,  6px 6px 0 0 #F9A825,
+                    0 8px 0 0 #00A86B,  -6px 6px 0 0 #F9A825,
+                    -8px 0 0 0 #00A86B, -6px -6px 0 0 #F9A825;
                 opacity: 1;
-                transform: translate(-50%, -50%) scale(0.5);
+                transform: translate(-50%, -50%) scale(0.6);
             }
             100% {
                 box-shadow:
-                    0 -25px 0 0 #00ba7c, 18px -18px 0 0 #FFD700,
-                    25px 0 0 0 #00ba7c,  18px 18px 0 0 #FFD700,
-                    0 25px 0 0 #00ba7c,  -18px 18px 0 0 #FFD700,
-                    -25px 0 0 0 #00ba7c, -18px -18px 0 0 #FFD700;
+                    0 -22px 0 0 #00A86B, 16px -16px 0 0 #F9A825,
+                    22px 0 0 0 #00A86B,  16px 16px 0 0 #F9A825,
+                    0 22px 0 0 #00A86B,  -16px 16px 0 0 #F9A825,
+                    -22px 0 0 0 #00A86B, -16px -16px 0 0 #F9A825;
                 opacity: 0;
-                transform: translate(-50%, -50%) scale(1.2);
+                transform: translate(-50%, -50%) scale(1);
             }
         }
         .tmd-down.completed svg {
-            color: #00ba7c;
-            animation: tmd-pop-anim 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+            color: #00A86B;
+            animation: tmd-pop-anim 450ms cubic-bezier(0.05, 0.7, 0.1, 1) forwards;
         }
         .tmd-down.completed:hover div:first-child:not(:last-child) {
-            background-color: rgba(0, 186, 124, 0.2);
+            background-color: rgba(0, 168, 107, 0.12);
         }
-        .tmd-desktop .tmd-down.completed::after {
+        .tmd-down.completed::after {
             content: '';
             position: absolute;
             top: 50%;
@@ -173,14 +190,18 @@ class Config {
             height: 4px;
             border-radius: 50%;
             transform: translate(-50%, -50%);
-            animation: tmd-burst-anim 0.6s ease-out forwards;
+            animation: tmd-burst-anim 500ms cubic-bezier(0.05, 0.7, 0.1, 1) forwards;
             pointer-events: none;
         }
-        .tmd-down.tmd-img {position: absolute; right: 0; bottom: 0; display: none !important; z-index: 5;}
-        .tmd-down.tmd-img > div {display: flex; border-radius: 99px; margin: 2px; background-color: rgba(255,255,255, 0.6);}
-        .tmd-down.tmd-img > div > div {display: flex; margin: 6px; color: #fff !important;}
-        .tmd-down.tmd-img:not(:hover) > div > div {filter: drop-shadow(0 0 1px #000);}
-        .tmd-down.tmd-img:hover > div > div {color: #FFD700;}
+        .tmd-down.exist::after { content: none; animation: none; }
+        @media (prefers-reduced-motion: reduce) {
+            .tmd-down.completed svg { animation: none; }
+            .tmd-down.completed::after { display: none; }
+            .tmd-down.loading svg { animation: none; }
+        }
+        .tmd-down.tmd-img {bottom: 0; display: none !important; z-index: 5;}
+        .tmd-down.tmd-img > div {background-color: rgba(255,255,255, 0.6);}
+        .tmd-down.tmd-img > div > div {color: #fff !important;}
         .tmd-desktop :hover > .tmd-down.tmd-img,
         .tmd-desktop .tmd-img.loading,
         .tmd-desktop .tmd-img.completed,
@@ -189,74 +210,66 @@ class Config {
         .tmd-mobile .tmd-down.tmd-img {display: block !important;}
         .tmd-mobile .tmd-down.tmd-img > div,
         .tmd-mobile .tmd-down.tmd-media > div {min-width: 44px; min-height: 44px; align-items: center; justify-content: center;}
+        .tmd-mobile .tmd-down.tmd-img > div {opacity: 1; background-color: rgba(0,0,0,0.55);}
+        .tmd-mobile .tmd-down.tmd-img svg {width: 18px !important; height: 18px !important;}
         .tmd-mobile .tmd-down.tmd-img > div > div,
         .tmd-mobile .tmd-down.tmd-media > div > div {margin: 10px;}
-        .tweet-detail-action-item {width: 20% !important;}
+        .tmd-mobile .tmd-down.completed::after {display: none;}
         .tmd-toast {
-            position: fixed; left: 50%; bottom: 80px; transform: translateX(-50%);
-            background: rgba(15,20,25,0.92); color: #fff; padding: 10px 16px; border-radius: 8px;
-            z-index: 10001; font-size: 13px; max-width: 90vw; text-align: center;
-            pointer-events: none; opacity: 0; transition: opacity 0.2s;
+            position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px) + 96px); transform: translateX(-50%);
+            background: var(--tmd-toast-bg, #1C1B1F); color: var(--tmd-toast-fg, #F5F5F5);
+            padding: 12px 16px; border-radius: 12px;
+            z-index: 10002; font-size: 14px; max-width: 90vw; text-align: center;
+            pointer-events: none; opacity: 0;
+            transition: opacity 200ms cubic-bezier(0.2, 0, 0, 1);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.18);
         }
         .tmd-toast.show { opacity: 1; }
     `;
 
     static modal_structure_css = `
-        .tmd-modal-wrapper {position: fixed; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: 10000; display: flex; justify-content: center; align-items: center;}
-        .tmd-modal-dialog {background-color: #fff; border-radius: 10px; width: 850px; max-width: 95vw; display: flex; flex-direction: column; color: #0f1419; font-family: sans-serif; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.15); transition: background-color 0.2s, color 0.2s;}
-        .tmd-mobile .tmd-modal-dialog {width: 100%; max-width: 100vw; max-height: 92vh; border-radius: 12px 12px 0 0; align-self: flex-end;}
-        .tmd-modal-header {padding: 15px 20px; border-bottom: 1px solid #eff3f4; display: flex; justify-content: space-between; align-items: center; background: #f7f9f9; transition: background-color 0.2s;}
-        .tmd-modal-header-left {display: flex; align-items: center; gap: 10px;}
-        .tmd-modal-title {margin: 0; font-size: 18px; font-weight: bold;}
-        .tmd-modal-actions {display: flex; align-items: center; gap: 10px;}
-        .tmd-icon-btn {cursor: pointer; display: flex; align-items: center; color: #536471; background: none; border: none; padding: 0; transition: color 0.2s; min-width: 32px; min-height: 32px; justify-content: center;}
-        .tmd-icon-btn:hover {color: #0f1419;}
-        .tmd-icon-btn.danger {color: #f4212e;}
-        .tmd-icon-btn.danger:hover {color: #c50f1a;}
-        .tmd-modal-content {overflow-y: auto; max-height: 60vh; padding: 0;}
-        .tmd-mobile .tmd-modal-content {max-height: 70vh;}
-        .tmd-modal-settings {padding: 20px; overflow-y: auto; max-height: 60vh;}
-        .tmd-mobile .tmd-modal-settings {max-height: 70vh;}
-        .tmd-empty-text {text-align: center; color: #536471; margin: 20px 0; padding: 20px;}
+        .tmd-modal-wrapper {position: fixed; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.4); z-index: 10000; display: flex; justify-content: center; align-items: center;}
+        .tmd-mobile .tmd-modal-wrapper {align-items: flex-end;}
+        .tmd-modal-dialog {background-color: var(--tmd-bg, #fff); border-radius: 16px; width: 850px; max-width: 95vw; display: flex; flex-direction: column; color: var(--tmd-on, #1C1B1F); font-family: sans-serif; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.18);}
+        .tmd-mobile .tmd-modal-dialog {width: 100%; max-width: 100vw; max-height: min(85dvh, 100%); border-radius: 16px 16px 0 0; align-self: flex-end; padding-bottom: env(safe-area-inset-bottom, 0px);}
+        .tmd-sheet-handle {display: none;}
+        .tmd-mobile .tmd-sheet-handle {display: block; width: 32px; height: 4px; border-radius: 2px; background: var(--tmd-outline, #E6E6E6); margin: 8px auto 0; flex-shrink: 0;}
+        .tmd-modal-header {padding: 16px 20px; border-bottom: 1px solid var(--tmd-outline, #E6E6E6); display: flex; justify-content: space-between; align-items: center; background: var(--tmd-surface, #F5F5F5); gap: 12px;}
+        .tmd-modal-header-left {display: flex; align-items: center; gap: 10px; min-width: 0;}
+        .tmd-modal-title {margin: 0; font-size: 18px; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;}
+        .tmd-modal-actions {display: flex; align-items: center; gap: 12px; flex-shrink: 0;}
+        .tmd-icon-btn {cursor: pointer; display: flex; align-items: center; color: var(--tmd-muted, #5F5F5F); background: none; border: none; padding: 0; min-width: 40px; min-height: 40px; justify-content: center; border-radius: 20px;}
+        .tmd-icon-btn:hover {color: var(--tmd-on, #1C1B1F); background: rgba(28,27,31,0.08);}
+        .tmd-icon-btn.danger {color: var(--tmd-danger, #B3261E);}
+        .tmd-icon-btn.danger:hover {color: var(--tmd-danger, #B3261E);}
+        .tmd-modal-content, .tmd-modal-settings {overflow-y: auto; max-height: 60vh;}
+        .tmd-mobile .tmd-modal-content, .tmd-mobile .tmd-modal-settings {max-height: 60dvh;}
+        .tmd-modal-content {padding: 0;}
+        .tmd-modal-settings {padding: 20px;}
+        .tmd-empty-text {text-align: center; color: var(--tmd-muted, #5F5F5F); margin: 20px 0; padding: 20px;}
         .tmd-modal-content::-webkit-scrollbar, .tmd-table-wrapper::-webkit-scrollbar {width: 8px; height: 8px;}
-        .tmd-modal-content::-webkit-scrollbar-track, .tmd-table-wrapper::-webkit-scrollbar-track {background: #ffffff; border-radius: 4px;}
-        .tmd-modal-content::-webkit-scrollbar-thumb, .tmd-table-wrapper::-webkit-scrollbar-thumb {background: #cccccc; border-radius: 4px;}
-        .tmd-modal-content::-webkit-scrollbar-thumb:hover, .tmd-table-wrapper::-webkit-scrollbar-thumb:hover {background: #b3b3b3;}
-        select.tmd-lang-select { background: #fff; color: #0f1419; border: 1px solid #cfd9de; border-radius: 4px; padding: 4px; font-size: 13px; outline: none; cursor: pointer; font-weight: bold; transition: 0.2s; }
-        .tmd-dark-theme { background-color: #15202b; color: #fff; border: 1px solid #38444d; box-shadow: 0 4px 12px rgba(255,255,255,0.05); }
-        .tmd-dark-theme .tmd-modal-header { background: #1e2732; border-bottom: 1px solid #38444d; }
-        .tmd-dark-theme .tmd-icon-btn { color: #8899a6; }
-        .tmd-dark-theme .tmd-icon-btn:hover { color: #fff; }
-        .tmd-dark-theme .tmd-empty-text { color: #8899a6; }
-        .tmd-dark-theme .tmd-table th { background: #1e2732; color: #8899a6; border-bottom: 1px solid #38444d; box-shadow: 0 1px 0 #38444d; }
-        .tmd-dark-theme .tmd-table td, .tmd-dark-theme .tmd-log-item { border-bottom: 1px solid #38444d; }
-        .tmd-dark-theme .tmd-table tbody tr:hover { background: #1e2732; }
-        .tmd-dark-theme .tmd-action-btn { background: #1e2732; border-color: #38444d; color: #fff; }
-        .tmd-dark-theme .tmd-action-btn:hover { background: #2c3640; }
-        .tmd-dark-theme .tmd-action-btn.del { background: transparent; border-color: #5c1822; color: #f4212e; }
-        .tmd-dark-theme .tmd-action-btn.del:hover { background: #311319; }
-        .tmd-dark-theme .tmd-textarea { background: #000; border-color: #38444d; color: #fff; }
-        .tmd-dark-theme .tmd-preview-box { background: #1e2732; border-color: #38444d; color: #fff; }
-        .tmd-dark-theme select.tmd-lang-select { background: #1e2732; color: #fff; border-color: #38444d; }
-        .tmd-dark-theme .tmd-modal-content::-webkit-scrollbar-track, .tmd-dark-theme .tmd-table-wrapper::-webkit-scrollbar-track {background: #15202b;}
-        .tmd-dark-theme .tmd-modal-content::-webkit-scrollbar-thumb, .tmd-dark-theme .tmd-table-wrapper::-webkit-scrollbar-thumb {background: #38444d;}
-        .tmd-dark-theme .tmd-modal-content::-webkit-scrollbar-thumb:hover, .tmd-dark-theme .tmd-table-wrapper::-webkit-scrollbar-thumb:hover {background: #8899a6;}
-        .tmd-dark-theme .tmd-card { border-bottom-color: #38444d; }
-        .tmd-dark-theme .tmd-card-meta { color: #8899a6; }
+        .tmd-modal-content::-webkit-scrollbar-track, .tmd-table-wrapper::-webkit-scrollbar-track {background: var(--tmd-bg, #fff); border-radius: 4px;}
+        .tmd-modal-content::-webkit-scrollbar-thumb, .tmd-table-wrapper::-webkit-scrollbar-thumb {background: var(--tmd-outline, #E6E6E6); border-radius: 4px;}
+        select.tmd-lang-select { background: var(--tmd-bg, #fff); color: var(--tmd-on, #1C1B1F); border: 1px solid var(--tmd-outline, #E6E6E6); border-radius: 8px; padding: 6px 8px; font-size: 13px; outline: none; cursor: pointer; font-weight: bold; min-height: 40px; }
+        .tmd-mobile select.tmd-lang-select, .tmd-mobile .tmd-option-select, .tmd-mobile .tmd-textarea {font-size: 16px;}
     `;
 
     static history_log_css = `
-        .tmd-history-btn {position: fixed; left: 16px; bottom: 16px; color: #000; background: #fff; border: 1px solid #ccc; border-radius: 8px; padding: 4px; display: flex; align-items: center; cursor: pointer; z-index: 9999; box-shadow: 0 2px 5px rgba(0,0,0,0.2); transition: 0.2s;}
-        .tmd-mobile .tmd-history-btn {left: auto; right: 16px; bottom: 72px; min-width: 44px; min-height: 44px; justify-content: center;}
-        .tmd-history-btn:hover {background: #f0f0f0;}
-        .tmd-history-btn.tmd-dark-theme {background: #15202b; color: #fff; border-color: #38444d;}
-        .tmd-history-btn.tmd-dark-theme:hover {background: #1e2732;}
-        .tmd-history-btn label {display: inline-flex; align-items: center; margin: 0 8px; cursor: pointer; font-family: monospace; font-size: 14px;}
-        .tmd-history-btn label:before {content: " "; width: 32px; height: 16px; background-position: center; background-repeat: no-repeat; background-image:url("${Config.logIconUri}");}
+        .tmd-history-btn {position: fixed; left: 16px; bottom: 24px; color: var(--tmd-on, #1C1B1F); background: var(--tmd-bg, #fff); border: 1px solid var(--tmd-outline, #E6E6E6); border-radius: 16px; padding: 4px; display: flex; align-items: center; cursor: pointer; z-index: 9999; box-shadow: 0 2px 8px rgba(0,0,0,0.16); font: inherit; appearance: none; -webkit-appearance: none;}
+        .tmd-history-btn.tmd-fab-hidden {display: none !important;}
+        .tmd-fab-icon {width: 32px; height: 16px; margin: 0 8px; flex-shrink: 0; background-position: center; background-repeat: no-repeat; background-size: contain; background-image:url("${Config.logIconUri}");}
+        .tmd-fab-count {font-family: sans-serif; font-size: 14px; margin-right: 8px;}
+        .tmd-fab-badge {display: none;}
+        .tmd-desktop .tmd-fab-badge {display: none !important;}
+        .tmd-mobile .tmd-history-btn {position: fixed; left: auto; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px) + 104px); width: 48px; height: 48px; min-width: 48px; min-height: 48px; border-radius: 50%; padding: 0; justify-content: center; touch-action: none;}
+        .tmd-mobile .tmd-fab-icon {margin: 0; width: 22px; height: 22px;}
+        .tmd-mobile .tmd-fab-count {display: none;}
+        .tmd-mobile .tmd-fab-badge {position: absolute; top: -2px; right: -2px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; background: var(--tmd-danger, #B3261E); color: #fff; font-size: 10px; font-weight: bold; align-items: center; justify-content: center; line-height: 1; box-sizing: border-box;}
+        .tmd-history-btn:hover {background: var(--tmd-surface, #F5F5F5);}
 
         .tmd-table-wrapper { width: 100%; overflow-x: auto; }
         .tmd-table { width: max-content; min-width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; font-family: sans-serif; white-space: nowrap; }
-        .tmd-table th, .tmd-table td { border-bottom: 1px solid #eff3f4; vertical-align: middle; }
+        .tmd-table th, .tmd-table td { border-bottom: 1px solid var(--tmd-outline, #E6E6E6); vertical-align: middle; }
 
         .tmd-table td {
             padding: 10px 15px;
@@ -267,58 +280,65 @@ class Config {
         }
 
         .tmd-table td:last-child { max-width: none; overflow: visible; }
-        .tmd-table th { background: #f7f9f9; color: #536471; position: sticky; top: 0; z-index: 10; font-weight: bold; box-shadow: 0 1px 0 #eff3f4; padding: 0; }
+        .tmd-table th { background: var(--tmd-surface, #F5F5F5); color: var(--tmd-muted, #5F5F5F); position: sticky; top: 0; z-index: 10; font-weight: bold; padding: 0; }
         .tmd-table th:nth-child(1) .tmd-th-inner { width: 65px; }
         .tmd-table th:nth-child(2) .tmd-th-inner { width: 140px; }
         .tmd-table th:nth-child(3) .tmd-th-inner { width: 70px; }
         .tmd-table th:nth-child(4) .tmd-th-inner { width: 130px; }
         .tmd-table th:nth-child(5) .tmd-th-inner { width: 130px; }
-        .tmd-table th:nth-child(6) .tmd-th-inner { width: 120px; resize: none; }
+        .tmd-table th:nth-child(6) .tmd-th-inner { width: 120px; }
 
-        .tmd-th-inner { resize: horizontal; overflow: hidden; padding: 10px 15px; min-width: 40px; display: block; box-sizing: border-box; }
-        .tmd-table tbody tr:hover { background: #f7f9f9; }
-        .tmd-thumb { width: 44px; height: 44px; object-fit: cover; border-radius: 6px; background: #eee; display: block; }
-        .tmd-action-btn { background: #eff3f4; border: 1px solid #cfd9de; padding: 6px 12px; border-radius: 99px; cursor: pointer; color: #0f1419; font-size: 12px; margin-right: 6px; font-weight: bold; transition: 0.2s; }
-        .tmd-action-btn:hover { background: #e1e8ed; }
-        .tmd-action-btn.del { color: #f4212e; border-color: #fcaeb4; background: #fff; }
-        .tmd-action-btn.del:hover { background: #fce8e8; }
+        .tmd-th-inner { overflow: hidden; padding: 10px 15px; min-width: 40px; display: block; box-sizing: border-box; }
+        .tmd-table tbody tr:hover { background: var(--tmd-surface, #F5F5F5); }
+        .tmd-thumb { width: 44px; height: 44px; object-fit: cover; border-radius: 8px; background: var(--tmd-surface, #F5F5F5); display: block; }
+        .tmd-action-btn { background: var(--tmd-surface, #F5F5F5); border: 1px solid var(--tmd-outline, #E6E6E6); padding: 8px 14px; border-radius: 20px; cursor: pointer; color: var(--tmd-on, #1C1B1F); font-size: 12px; margin-right: 6px; font-weight: bold; min-height: 40px; }
+        .tmd-action-btn:hover { filter: brightness(0.96); }
+        .tmd-action-btn.del { color: var(--tmd-danger, #B3261E); border-color: var(--tmd-outline, #E6E6E6); background: transparent; }
+        .tmd-action-btn.del:hover { background: rgba(179, 38, 30, 0.08); }
 
         .tmd-card-list { display: flex; flex-direction: column; }
-        .tmd-card { display: flex; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #eff3f4; align-items: center; }
+        .tmd-card { display: flex; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--tmd-outline, #E6E6E6); align-items: center; }
         .tmd-card-body { flex: 1; min-width: 0; }
         .tmd-card-user { font-weight: bold; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .tmd-card-meta { font-size: 12px; color: #536471; margin-top: 4px; }
+        .tmd-card-meta { font-size: 12px; color: var(--tmd-muted, #5F5F5F); margin-top: 4px; }
         .tmd-card-actions { display: flex; flex-direction: column; gap: 6px; }
-        .tmd-card-actions .tmd-action-btn { margin-right: 0; min-height: 36px; }
+        .tmd-card-actions .tmd-action-btn { margin-right: 0; min-height: 40px; }
+        .tmd-load-more { display: none; width: calc(100% - 32px); margin: 12px 16px 16px; min-height: 40px; border: 1px solid var(--tmd-outline, #E6E6E6); border-radius: 12px; background: var(--tmd-surface, #F5F5F5); color: var(--tmd-on, #1C1B1F); font-weight: bold; font-size: 14px; cursor: pointer; }
     `;
 
     static settings_form_css = `
         .tmd-checkbox-label {display: flex; align-items: center; margin-bottom: 20px; cursor: pointer; font-size: 15px;}
-        .tmd-checkbox-label input {margin-right: 10px; cursor: pointer; width: 16px; height: 16px;}
+        .tmd-checkbox-label input {margin-right: 10px; cursor: pointer; width: 18px; height: 18px;}
         .tmd-pattern-header {display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 8px;}
+        .tmd-pattern-header.tmd-settings-top {align-items: center;}
+        .tmd-pattern-header.tmd-pattern-block {margin-top: 20px;}
         .tmd-mobile .tmd-pattern-header {flex-direction: column; align-items: stretch; gap: 12px;}
         .tmd-pattern-label {font-weight: bold; font-size: 15px;}
-        .tmd-btn-reset {cursor: pointer; color: #1d9bf0; font-size: 13px; border: none; background: none; padding: 0;}
-        .tmd-btn-reset:hover {text-decoration: underline;}
-        .tmd-textarea {width: 100%; height: 80px; box-sizing: border-box; padding: 10px; border: 1px solid #cfd9de; border-radius: 4px; font-family: monospace; resize: vertical; font-size: 14px; color: #fff; background-color: #15202b;}
-        .tmd-textarea:focus {outline: none; border-color: #1d9bf0;}
-        .tmd-preview-box {margin-top: 10px; padding: 12px; background: #f7f9f9; border: 1px solid #eff3f4; border-radius: 4px; font-family: monospace; font-size: 13px; color: #0f1419; word-break: break-all;}
-        .tmd-preview-error {color: #f4212e; font-size: 13px; margin-top: 8px; display: none;}
-        .tmd-btn-save {margin-top: 20px; padding: 8px 24px; background: #1d9bf0; color: #fff; border: none; border-radius: 9999px; cursor: pointer; font-weight: bold; font-size: 15px; display: block; margin-left: auto; text-align: center; transition: background 0.2s;}
-        .tmd-btn-save:hover:not(:disabled) {background: #1a8cd8;}
-        .tmd-btn-save:disabled {background: #8ecdf8; cursor: not-allowed;}
-        .tmd-btn-save.saved {background: #00ba7c; cursor: default;}
-        .tmd-available-tag { background: #50e3c2; color: #000; padding: 6px 12px; border-radius: 99px; font-size: 13px; font-weight: bold; cursor: pointer; transition: 0.2s; user-select: none; }
-        .tmd-available-tag:hover { filter: brightness(0.9); }
+        .tmd-preview-label {margin-top: 15px;}
+        .tmd-checkbox-col {display: flex; flex-direction: column; gap: 10px;}
+        .tmd-checkbox-col .tmd-checkbox-label {margin-bottom: 0;}
+        .tmd-shortcut-row {margin-bottom: 0;}
+        .tmd-btn-reset {cursor: pointer; color: var(--tmd-on, #1C1B1F); font-size: 13px; border: none; background: none; padding: 0; text-decoration: underline;}
+        .tmd-textarea {width: 100%; height: 80px; box-sizing: border-box; padding: 10px; border: 1px solid var(--tmd-outline, #E6E6E6); border-radius: 12px; font-family: monospace; resize: vertical; font-size: 14px; color: var(--tmd-on, #1C1B1F); background-color: var(--tmd-bg, #fff);}
+        .tmd-textarea.tmd-shortcut-input {width: 50px; height: 40px; padding: 4px; text-align: center; margin-left: 10px; font-weight: bold; text-transform: uppercase; display: inline-block;}
+        .tmd-textarea:focus {outline: none; border-color: var(--tmd-on, #1C1B1F);}
+        .tmd-preview-box {margin-top: 10px; padding: 12px; background: var(--tmd-surface, #F5F5F5); border: 1px solid var(--tmd-outline, #E6E6E6); border-radius: 12px; font-family: monospace; font-size: 13px; color: var(--tmd-on, #1C1B1F); word-break: break-all;}
+        .tmd-preview-error {color: var(--tmd-danger, #B3261E); font-size: 13px; margin-top: 8px; display: none;}
+        .tmd-btn-save {margin-top: 20px; padding: 10px 24px; background: var(--tmd-primary, #1C1B1F); color: var(--tmd-on-primary, #fff); border: none; border-radius: 20px; cursor: pointer; font-weight: bold; font-size: 15px; display: block; margin-left: auto; text-align: center; min-height: 40px;}
+        .tmd-mobile .tmd-btn-save {position: sticky; bottom: 0; width: 100%; margin: 12px 0 0; border-radius: 12px; z-index: 2;}
+        .tmd-tag-details {margin-top: 8px;}
+        .tmd-tag-details > summary {cursor: pointer; font-size: 14px; font-weight: bold; padding: 8px 0;}
+        .tmd-btn-save:hover:not(:disabled) {opacity: 0.9;}
+        .tmd-btn-save:disabled {opacity: 0.4; cursor: not-allowed;}
+        .tmd-available-tag { background: var(--tmd-surface, #F5F5F5); color: var(--tmd-on, #1C1B1F); border: 1px solid var(--tmd-outline, #E6E6E6); padding: 8px 12px; border-radius: 8px; font-size: 13px; font-weight: bold; cursor: pointer; user-select: none; }
+        .tmd-available-tag:hover { background: var(--tmd-outline, #E6E6E6); }
         .tmd-tag-container { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-        .tmd-dark-theme .tmd-available-tag { background: #2c9a82; color: #fff; }
         .tmd-extra-options { display: flex; flex-direction: column; gap: 12px; margin-top: 20px; }
         .tmd-option-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
         .tmd-option-row .tmd-pattern-label { margin: 0; }
-        .tmd-option-select { background: #fff; color: #0f1419; border: 1px solid #cfd9de; border-radius: 4px; padding: 6px 10px; font-size: 13px; outline: none; cursor: pointer; font-weight: bold; min-width: 120px; }
-        .tmd-pattern-hint { margin-top: 8px; font-size: 12px; color: #536471; line-height: 1.4; }
-        .tmd-dark-theme .tmd-option-select { background: #1e2732; color: #fff; border-color: #38444d; }
-        .tmd-dark-theme .tmd-pattern-hint { color: #8899a6; }
+        .tmd-option-select { background: var(--tmd-bg, #fff); color: var(--tmd-on, #1C1B1F); border: 1px solid var(--tmd-outline, #E6E6E6); border-radius: 8px; padding: 8px 10px; font-size: 13px; outline: none; cursor: pointer; font-weight: bold; min-width: 120px; min-height: 40px; }
+        .tmd-pattern-hint { margin-top: 8px; font-size: 12px; color: var(--tmd-muted, #5F5F5F); line-height: 1.4; }
+        .tmd-btn-clear-history { margin-top: 8px; padding: 10px 16px; background: transparent; color: var(--tmd-danger, #B3261E); border: 1px solid var(--tmd-outline, #E6E6E6); border-radius: 20px; cursor: pointer; font-weight: bold; font-size: 14px; min-height: 40px; }
     `;
 
     static svg = `
@@ -346,7 +366,8 @@ class Config {
         clear: `<svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>`,
         close: `<svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`,
         sun: `<svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>`,
-        moon: `<svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>`
+        moon: `<svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>`,
+        auto: `<svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a10 10 0 0 1 0 20z" fill="currentColor"></path></svg>`
     };
 }
 
@@ -407,20 +428,26 @@ class StorageCompat {
 }
 
 class Utils {
-    static getCookie(name) {
+    static getCookie() {
         const cookies = {};
-        document.cookie.split(';').filter(n => n.includes('=')).forEach(n => {
-            n.replace(/^([^=]+)=(.+)$/, (_, key, value) => { cookies[key.trim()] = value.trim(); });
+        document.cookie.split(';').forEach(n => {
+            const i = n.indexOf('=');
+            if (i < 0) return;
+            const key = n.slice(0, i).trim();
+            if (key === 'ct0' || key === 'gt' || key === 'lang') {
+                cookies[key] = n.slice(i + 1).trim();
+            }
         });
-        return name ? cookies[name] : cookies;
+        return cookies;
     }
 
     static formatDate(i, o, tz) {
         const d = new Date(i);
         if (tz) d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
         const m = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+        const year = d.getUTCFullYear().toString();
         const v = {
-            YYYY: d.getUTCFullYear().toString(), YY: d.getUTCFullYear().toString(),
+            YYYY: year, YY: year.slice(-2),
             MM: d.getUTCMonth() + 1, MMM: m[d.getUTCMonth()], DD: d.getUTCDate(),
             hh: d.getUTCHours(), mm: d.getUTCMinutes(), ss: d.getUTCSeconds(),
             h2: d.getUTCHours() % 12, ap: d.getUTCHours() < 12 ? 'AM' : 'PM'
@@ -449,13 +476,32 @@ class Utils {
 
     static extractDateTimeFormat(pattern, invalid) {
         invalid = invalid || Utils.getInvalidChars();
-        return pattern.match(/{date-time(-local)?:[^{}]+}/)
-            ? pattern.match(/{date-time(?:-local)?:([^{}]+)}/)[1].replace(/[\\/|<>*?:"]/g, v => invalid[v] || '')
+        const m = pattern.match(/{date-time(?:-local)?:([^{}]+)}/);
+        return m
+            ? m[1].replace(/[\\/|<>*?:"]/g, v => invalid[v] || '')
             : 'YYYYMMDD-hhmmss';
     }
 
     static extractFullTextLength(pattern) {
-        return pattern.match(/{full-text:(\d+)}/) ? parseInt(pattern.match(/{full-text:(\d+)}/)[1], 10) : 999;
+        const m = pattern.match(/{full-text:(\d+)}/);
+        return m ? parseInt(m[1], 10) : 999;
+    }
+
+    static resolvePatternMeta(pattern) {
+        const out = String(pattern || '').split('\n').join('');
+        const invalid = Utils.getInvalidChars();
+        return {
+            out,
+            invalid,
+            datetime: Utils.extractDateTimeFormat(out, invalid),
+            textLength: Utils.extractFullTextLength(out)
+        };
+    }
+
+    static indexSuffixFor(pattern, { multiOrIndex = false, mediaIndex = 1 } = {}) {
+        if (!multiOrIndex) return '';
+        if (pattern.includes('{index}') || pattern.includes('{file-name}')) return '';
+        return '-' + mediaIndex;
     }
 
     /**
@@ -507,6 +553,7 @@ class StorageManager {
         shortcut_key: 'shortcutKey',
         tmd_theme: 'theme',
         tmd_lang: 'lang',
+        tmd_fab_pos: 'fabPos',
         history_limit: 'historyLimit',
         download_timeout: 'downloadTimeoutMs'
     };
@@ -521,10 +568,11 @@ class StorageManager {
         this.autoBookmarkFlag = false;
         this.filenamePattern = Config.defaultFilename;
         this.shortcutKey = 'D';
-        this.theme = 'light';
+        this.theme = 'auto';
         this.lang = 'auto';
         this.historyLimit = Config.HISTORY_LIMIT;
         this.downloadTimeoutMs = Config.DOWNLOAD_TIMEOUT_MS;
+        this.fabPos = null;
         this.queryId = Config.DEFAULT_QUERY_ID;
         this.bearer = Config.AUTH_TOKEN;
     }
@@ -556,6 +604,7 @@ class StorageManager {
             storedLang,
             historyLimit,
             downloadTimeoutMs,
+            fabPos,
             queryId,
             bearer
         ] = await Promise.all([
@@ -564,10 +613,11 @@ class StorageManager {
             StorageCompat.getVal('auto_bookmark', false),
             StorageCompat.getVal('filename', Config.defaultFilename),
             StorageCompat.getVal('shortcut_key', 'D'),
-            StorageCompat.getVal('tmd_theme', 'light'),
+            StorageCompat.getVal('tmd_theme', 'auto'),
             StorageCompat.getVal('tmd_lang', 'auto'),
             StorageCompat.getVal('history_limit', Config.HISTORY_LIMIT),
             StorageCompat.getVal('download_timeout', Config.DOWNLOAD_TIMEOUT_MS),
+            StorageCompat.getVal('tmd_fab_pos', null),
             StorageCompat.getVal(Config.QUERY_ID_STORAGE_KEY, Config.DEFAULT_QUERY_ID),
             StorageCompat.getVal(Config.BEARER_STORAGE_KEY, Config.AUTH_TOKEN)
         ]);
@@ -578,10 +628,11 @@ class StorageManager {
         this.autoBookmarkFlag = autoBookmarkFlag;
         this.filenamePattern = filenamePattern;
         this.shortcutKey = shortcutKey;
-        this.theme = theme;
+        this.theme = (theme === 'light' || theme === 'dark' || theme === 'auto') ? theme : 'auto';
         this.lang = (storedLang === 'auto' || storedLang === 'en' || storedLang === 'zh') ? storedLang : 'auto';
         this.historyLimit = StorageManager.normalizeHistoryLimit(historyLimit);
         this.downloadTimeoutMs = StorageManager.normalizeTimeout(downloadTimeoutMs);
+        this.fabPos = (fabPos && typeof fabPos.x === 'number' && typeof fabPos.y === 'number') ? fabPos : null;
         this.queryId = queryId;
         this.bearer = bearer;
     }
@@ -631,15 +682,19 @@ class QueryIdResolver {
     static interceptedBearer = null;
     static hookInstalled = false;
 
+    static matchTweetResultQueryId(url) {
+        const m = String(url || '').match(/\/i\/api\/graphql\/([^/]+)\/TweetResultByRestId/);
+        return m ? m[1] : null;
+    }
+
     static installNetworkHook() {
         if (QueryIdResolver.hookInstalled) return;
         QueryIdResolver.hookInstalled = true;
 
         const capture = (url, headers) => {
             try {
-                const u = String(url || '');
-                const m = u.match(/\/i\/api\/graphql\/([^/]+)\/TweetResultByRestId/);
-                if (m) QueryIdResolver.interceptedId = m[1];
+                const id = QueryIdResolver.matchTweetResultQueryId(url);
+                if (id) QueryIdResolver.interceptedId = id;
                 if (headers) {
                     const auth = headers.get ? headers.get('authorization') : (headers.authorization || headers.Authorization);
                     if (auth && /Bearer\s+/i.test(auth)) QueryIdResolver.interceptedBearer = auth;
@@ -693,8 +748,8 @@ class QueryIdResolver {
             const entries = performance.getEntriesByType('resource') || [];
             for (let i = entries.length - 1; i >= 0; i--) {
                 const name = entries[i].name || '';
-                const m = name.match(/\/i\/api\/graphql\/([^/]+)\/TweetResultByRestId/);
-                if (m) return m[1];
+                const id = QueryIdResolver.matchTweetResultQueryId(name);
+                if (id) return id;
             }
         } catch (e) {
             /* ignore */
@@ -891,13 +946,19 @@ class TwitterAPI {
         if (cookies.ct0) headers['x-csrf-token'] = cookies.ct0;
         if (cookies.gt) headers['x-guest-token'] = cookies.gt;
 
+        const retryIfQueryIdChanged = async () => {
+            const refreshed = await QueryIdResolver.resolve(storage, true);
+            if (refreshed && refreshed !== queryId) {
+                return TwitterAPI.fetchTweetJson(status_id, storage, true);
+            }
+            return null;
+        };
+
         const res = await fetch(url, { headers, credentials: 'include' });
         if (!res.ok) {
             if (!forceRefresh && (res.status === 400 || res.status === 404)) {
-                const refreshed = await QueryIdResolver.resolve(storage, true);
-                if (refreshed && refreshed !== queryId) {
-                    return TwitterAPI.fetchTweetJson(status_id, storage, true);
-                }
+                const retried = await retryIfQueryIdChanged();
+                if (retried) return retried;
             }
             const err = new Error('API_ERROR');
             err.code = 'API_ERROR';
@@ -910,10 +971,8 @@ class TwitterAPI {
         const tweet = TweetUnwrapper.unwrap(raw);
         if (!tweet || !tweet.legacy) {
             if (!forceRefresh) {
-                const refreshed = await QueryIdResolver.resolve(storage, true);
-                if (refreshed && refreshed !== queryId) {
-                    return TwitterAPI.fetchTweetJson(status_id, storage, true);
-                }
+                const retried = await retryIfQueryIdChanged();
+                if (retried) return retried;
             }
             const err = new Error('API_EXPIRED');
             err.code = 'API_EXPIRED';
@@ -964,27 +1023,13 @@ class Downloader {
             const isMobile = this.env.isMobile;
             let settled = false;
             let abortFn = null;
+            let timer = 0;
             const finish = (ok, err) => {
                 if (settled) return;
                 settled = true;
-                clearTimeout(timer);
+                if (timer) clearTimeout(timer);
                 resolve(ok ? { ok: true } : { ok: false, error: err });
             };
-
-            // Desktop waits for real completion; mobile treats "initiated" as success
-            // because Via/WebView often never fires onload after system DownloadManager takes over.
-            const timer = setTimeout(() => {
-                if (isMobile) {
-                    finish(true);
-                    return;
-                }
-                try {
-                    abortFn && abortFn();
-                } catch (e) {
-                    /* ignore */
-                }
-                finish(false, { error: 'timeout', code: 'TIMEOUT' });
-            }, isMobile ? Config.MOBILE_GM_OPTIMISTIC_MS : this.timeout_ms);
 
             try {
                 const gmDl = typeof GM_download === 'function' ? GM_download : (GM && GM.download);
@@ -999,12 +1044,21 @@ class Downloader {
                     }
                 });
                 if (handle && typeof handle.abort === 'function') abortFn = () => handle.abort();
-                if (handle && typeof handle.then === 'function') {
-                    handle.then(() => finish(true)).catch(e => {
-                        if (isMobile) finish(true);
-                        else finish(false, e);
-                    });
+                if (isMobile) {
+                    requestAnimationFrame(() => finish(true));
+                    return;
                 }
+                if (handle && typeof handle.then === 'function') {
+                    handle.then(() => finish(true)).catch(e => finish(false, e));
+                }
+                timer = setTimeout(() => {
+                    try {
+                        abortFn && abortFn();
+                    } catch (e) {
+                        /* ignore */
+                    }
+                    finish(false, { error: 'timeout', code: 'TIMEOUT' });
+                }, this.timeout_ms);
             } catch (e) {
                 finish(false, e);
             }
@@ -1036,7 +1090,7 @@ class Downloader {
                             /* ignore */
                         }
                         reject(new Error('TIMEOUT'));
-                    });
+                    }, { once: true });
                 });
             } else {
                 const res = await fetch(task.url, { signal: controller.signal, credentials: 'omit' });
@@ -1129,14 +1183,52 @@ class UIManager {
         this.app = app;
         this.lang = this.getLang();
         this.historyBtn = null;
-        this.processedArticles = new WeakSet();
         this.processedListItems = new WeakSet();
+        this.bookmarkedIds = new Set();
+        this._scrollLocked = false;
+        this._prevOverflow = '';
     }
 
     injectCSS() {
         const modeClass = this.app.env.isMobile ? 'tmd-mobile' : 'tmd-desktop';
         document.documentElement.classList.add(modeClass);
-        Utils.injectStyle(Config.media_btn_css + Config.modal_structure_css + Config.history_log_css + Config.settings_form_css);
+        this.applyChromeTheme();
+        Utils.injectStyle([
+            Config.media_btn_css,
+            Config.modal_structure_css,
+            Config.history_log_css,
+            Config.settings_form_css
+        ].join(''));
+    }
+
+    resolvedTheme() {
+        const pref = this.app.storage.theme;
+        if (pref === 'light' || pref === 'dark') return pref;
+        try {
+            if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) return 'dark';
+        } catch (e) {
+            /* ignore */
+        }
+        try {
+            const bg = getComputedStyle(document.documentElement).backgroundColor;
+            const m = bg && bg.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+            if (m && (+m[1] + +m[2] + +m[3]) / 3 < 80) return 'dark';
+        } catch (e) {
+            /* ignore */
+        }
+        return 'light';
+    }
+
+    applyChromeTheme() {
+        const dark = this.resolvedTheme() === 'dark';
+        document.documentElement.classList.toggle('tmd-theme-dark', dark);
+        document.documentElement.classList.toggle('tmd-theme-light', !dark);
+    }
+
+    successTitle() {
+        return this.app.env.isMobile
+            ? (this.lang.started || this.lang.completed)
+            : this.lang.completed;
     }
 
     setButtonStatus(btn, css, title) {
@@ -1159,10 +1251,28 @@ class UIManager {
         return Config.language[code] || Config.language.en;
     }
 
-    tryClickBookmark(article) {
+    tryClickBookmark(article, status_id) {
         if (!this.app.storage.autoBookmarkFlag || !article) return;
+        if (status_id && this.bookmarkedIds.has(status_id)) return;
         const bookmarkBtn = article.querySelector('button[data-testid="bookmark"]');
-        if (bookmarkBtn) bookmarkBtn.click();
+        if (bookmarkBtn) {
+            bookmarkBtn.click();
+            if (status_id) this.bookmarkedIds.add(status_id);
+        }
+    }
+
+    themeIcon(pref) {
+        if (pref === 'auto') return Config.icon_svg.auto;
+        if (pref === 'dark') return Config.icon_svg.moon;
+        return Config.icon_svg.sun;
+    }
+
+    downloadBtnState(statusId) {
+        const exist = this.app.storage.isDownloaded(statusId);
+        return {
+            css: exist ? 'exist' : 'download',
+            title: exist ? this.lang.completed : this.lang.download
+        };
     }
 
     createMediaDownloadBtn(extraClass, statusCss, title) {
@@ -1174,63 +1284,194 @@ class UIManager {
     }
 
     bindHistoryItemActions(goBtn, delBtn, item, updateView) {
-        goBtn.onclick = () => window.open(`https://x.com/i/status/${item.id}`, '_blank');
+        if (goBtn) {
+            goBtn.onclick = () => window.open(`https://x.com/i/status/${item.id}`, '_blank');
+        }
         delBtn.onclick = async () => {
+            const msg = (this.lang.dialog && this.lang.dialog.del_confirm) || 'Delete this record?';
+            if (!confirm(msg)) return;
             await this.app.storage.removeHistory(item.id);
             this.updateHistoryCount();
             updateView();
         };
     }
 
-    renderHistoryUI() {
-        this.historyBtn = document.createElement('div');
-        this.historyBtn.title = this.lang.history;
-        this.historyBtn.classList.add('tmd-history-btn');
-        if (this.app.storage.theme === 'dark') this.historyBtn.classList.add('tmd-dark-theme');
-
-        const label = document.createElement('label');
-        label.textContent = String(this.app.storage.history.length);
-        this.historyBtn.appendChild(label);
-        this.historyBtn.onclick = () => this.showModal();
-
-        if (this.app.env.isMobile) {
-            document.body.appendChild(this.historyBtn);
-            return;
-        }
-
-        const mountToHeader = () => {
-            const header = document.querySelector('header[role="banner"]');
-            if (header) {
-                header.style.position = 'relative';
-                header.appendChild(this.historyBtn);
-                return true;
-            }
-            return false;
-        };
-
-        if (!mountToHeader()) {
-            document.body.appendChild(this.historyBtn);
-            const observer = new MutationObserver(() => {
-                if (this.historyBtn.parentElement === document.body && mountToHeader()) {
-                    observer.disconnect();
-                }
-            });
-            observer.observe(document.body, { childList: true, subtree: true });
-        }
+    historyCountText() {
+        const n = this.app.storage.history.length;
+        return n > 99 ? '99+' : String(n);
     }
 
     updateHistoryCount() {
-        if (this.historyBtn) {
-            const label = this.historyBtn.querySelector('label');
-            if (label) label.textContent = String(this.app.storage.history.length);
+        if (!this.historyBtn) return;
+        const n = this.app.storage.history.length;
+        const count = this.historyBtn.querySelector('.tmd-fab-count');
+        const badge = this.historyBtn.querySelector('.tmd-fab-badge');
+        if (count) count.textContent = String(n);
+        if (badge) {
+            badge.textContent = this.historyCountText();
+            badge.style.display = n ? 'flex' : 'none';
         }
+    }
+
+    setFabVisible(show) {
+        if (this.historyBtn) this.historyBtn.classList.toggle('tmd-fab-hidden', !show);
+    }
+
+    lockPageScroll() {
+        if (this._scrollLocked) return;
+        this._scrollLocked = true;
+        this._prevOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+    }
+
+    unlockPageScroll() {
+        if (!this._scrollLocked) return;
+        this._scrollLocked = false;
+        document.body.style.overflow = this._prevOverflow || '';
+    }
+
+    closeModal(wrapper) {
+        this.unlockPageScroll();
+        this.setFabVisible(true);
+        if (wrapper && wrapper.parentNode) wrapper.remove();
+    }
+
+    clampFabPos(x, y) {
+        const size = 48;
+        const maxX = Math.max(0, window.innerWidth - size);
+        const maxY = Math.max(0, window.innerHeight - size);
+        return {
+            x: Math.min(maxX, Math.max(0, x)),
+            y: Math.min(maxY, Math.max(0, y))
+        };
+    }
+
+    applyFabPosition() {
+        const btn = this.historyBtn;
+        if (!btn || !this.app.env.isMobile) return;
+        const pos = this.app.storage.fabPos;
+        if (!pos) return;
+        const { x, y } = this.clampFabPos(pos.x, pos.y);
+        btn.style.left = x + 'px';
+        btn.style.top = y + 'px';
+        btn.style.right = 'auto';
+        btn.style.bottom = 'auto';
+    }
+
+    bindFabDrag(btn) {
+        if (!this.app.env.isMobile) {
+            btn.onclick = () => this.showModal();
+            return;
+        }
+        let startX = 0;
+        let startY = 0;
+        let origX = 0;
+        let origY = 0;
+        let dragged = false;
+        const threshold = 8;
+        btn.addEventListener('pointerdown', e => {
+            if (e.button != null && e.button !== 0) return;
+            const rect = btn.getBoundingClientRect();
+            startX = e.clientX;
+            startY = e.clientY;
+            origX = rect.left;
+            origY = rect.top;
+            dragged = false;
+            try { btn.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+            const move = ev => {
+                const dx = ev.clientX - startX;
+                const dy = ev.clientY - startY;
+                if (!dragged && (dx * dx + dy * dy) < threshold * threshold) return;
+                dragged = true;
+                const { x, y } = this.clampFabPos(origX + dx, origY + dy);
+                btn.style.left = x + 'px';
+                btn.style.top = y + 'px';
+                btn.style.right = 'auto';
+                btn.style.bottom = 'auto';
+            };
+            const up = () => {
+                btn.removeEventListener('pointermove', move);
+                btn.removeEventListener('pointerup', up);
+                btn.removeEventListener('pointercancel', up);
+                if (dragged) {
+                    this.app.storage.setSetting('tmd_fab_pos', {
+                        x: parseFloat(btn.style.left),
+                        y: parseFloat(btn.style.top)
+                    });
+                } else {
+                    this.showModal();
+                }
+            };
+            btn.addEventListener('pointermove', move);
+            btn.addEventListener('pointerup', up);
+            btn.addEventListener('pointercancel', up);
+        });
+    }
+
+    bindSheetClose(wrapper, dialog, close) {
+        if (!this.app.env.isMobile) return;
+        const targets = [dialog.querySelector('.tmd-sheet-handle'), dialog.querySelector('.tmd-modal-header')];
+        targets.forEach(el => {
+            if (!el) return;
+            el.addEventListener('pointerdown', e => {
+                const y0 = e.clientY;
+                try { el.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+                const move = ev => {
+                    if (ev.clientY - y0 > 80) {
+                        el.removeEventListener('pointermove', move);
+                        close();
+                    }
+                };
+                el.addEventListener('pointermove', move);
+            });
+        });
+    }
+
+    fillSelect(select, items, current) {
+        items.forEach(({ val, txt }) => {
+            const opt = Utils.$el(select, 'option', '', txt);
+            opt.value = String(val);
+            if (current === val || String(current) === String(val)) opt.selected = true;
+        });
+    }
+
+    fillLangSelect(select) {
+        this.fillSelect(select, [
+            { val: 'auto', txt: 'Auto' },
+            { val: 'en', txt: 'English' },
+            { val: 'zh', txt: '简体中文' }
+        ], this.app.storage.lang);
+    }
+
+    fillThemeSelect(select) {
+        this.fillSelect(select, [
+            { val: 'auto', txt: this.lang.theme_auto || 'Auto' },
+            { val: 'light', txt: this.lang.theme_light || 'Light' },
+            { val: 'dark', txt: this.lang.theme_dark || 'Dark' }
+        ], this.app.storage.theme);
+    }
+
+    renderHistoryUI() {
+        this.historyBtn = document.createElement('button');
+        this.historyBtn.type = 'button';
+        this.historyBtn.title = this.lang.history;
+        this.historyBtn.classList.add('tmd-history-btn');
+        Utils.$el(this.historyBtn, 'span', 'tmd-fab-icon');
+        Utils.$el(this.historyBtn, 'span', 'tmd-fab-count', String(this.app.storage.history.length));
+        const badge = Utils.$el(this.historyBtn, 'span', 'tmd-fab-badge', this.historyCountText());
+        if (this.app.storage.history.length) badge.style.display = 'flex';
+        document.body.appendChild(this.historyBtn);
+        this.applyFabPosition();
+        this.bindFabDrag(this.historyBtn);
+    }
+
+    reversedHistory() {
+        return [...this.app.storage.history].reverse();
     }
 
     formatDt(ts) {
         if (!ts) return this.lang.unknown_date || 'Unknown Date';
-        const d = new Date(ts);
-        const pad = n => n.toString().padStart(2, '0');
-        return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        return Utils.formatDate(ts, 'YYYY/MM/DD hh:mm', true);
     }
 
     showModal(startView = 'history') {
@@ -1238,6 +1479,8 @@ class UIManager {
         let currentView = startView;
         const dialogLang = this.lang.dialog || {};
 
+        this.setFabVisible(false);
+        this.lockPageScroll();
         const shell = this.createModalShell(dialogLang, () => currentView);
         const { wrapper, titleEl, backBtn, settingsBtn, clearBtn, historyContainer, settingsContainer } = shell;
 
@@ -1270,57 +1513,59 @@ class UIManager {
     }
 
     createModalShell(dialogLang, getView) {
+        const isMobile = this.app.env.isMobile;
         const wrapper = Utils.$el(document.body, 'div', 'tmd-modal-wrapper');
-        wrapper.onclick = (e) => { if (e.target === wrapper) wrapper.remove(); };
+        const close = () => this.closeModal(wrapper);
+        wrapper.onclick = (e) => { if (e.target === wrapper) close(); };
 
         const dialog = Utils.$el(wrapper, 'div', 'tmd-modal-dialog');
-        if (this.app.storage.theme === 'dark') dialog.classList.add('tmd-dark-theme');
+        Utils.$el(dialog, 'div', 'tmd-sheet-handle');
 
         const header = Utils.$el(dialog, 'div', 'tmd-modal-header');
         const headerLeft = Utils.$el(header, 'div', 'tmd-modal-header-left');
         const backBtn = Utils.$el(headerLeft, 'button', 'tmd-icon-btn', null, Config.icon_svg.back);
+        backBtn.type = 'button';
         const titleEl = Utils.$el(headerLeft, 'h3', 'tmd-modal-title', '');
         const headerActions = Utils.$el(header, 'div', 'tmd-modal-actions');
 
-        const langSelect = Utils.$el(headerActions, 'select', 'tmd-lang-select');
-        [
-            { val: 'auto', txt: 'Auto' },
-            { val: 'en', txt: 'English' },
-            { val: 'zh', txt: '简体中文' }
-        ].forEach(l => {
-            const opt = Utils.$el(langSelect, 'option', '', l.txt);
-            opt.value = l.val;
-            if (this.app.storage.lang === l.val) opt.selected = true;
-        });
+        if (!isMobile) {
+            const langSelect = Utils.$el(headerActions, 'select', 'tmd-lang-select');
+            this.fillLangSelect(langSelect);
+            langSelect.onchange = async () => {
+                await this.app.storage.setSetting('tmd_lang', langSelect.value);
+                close();
+                this.showModal(getView());
+            };
 
-        langSelect.onchange = async () => {
-            await this.app.storage.setSetting('tmd_lang', langSelect.value);
-            wrapper.remove();
-            this.showModal(getView());
-        };
-
-        const themeBtn = Utils.$el(headerActions, 'button', 'tmd-icon-btn', null,
-            this.app.storage.theme === 'dark' ? Config.icon_svg.sun : Config.icon_svg.moon);
-        themeBtn.title = 'Toggle Theme';
-        themeBtn.onclick = async () => {
-            const newTheme = this.app.storage.theme === 'dark' ? 'light' : 'dark';
-            await this.app.storage.setSetting('tmd_theme', newTheme);
-            themeBtn.innerHTML = newTheme === 'dark' ? Config.icon_svg.sun : Config.icon_svg.moon;
-            dialog.classList.toggle('tmd-dark-theme', newTheme === 'dark');
-            if (this.historyBtn) this.historyBtn.classList.toggle('tmd-dark-theme', newTheme === 'dark');
-        };
+            const themeBtn = Utils.$el(headerActions, 'button', 'tmd-icon-btn', null,
+                this.themeIcon(this.app.storage.theme));
+            themeBtn.type = 'button';
+            themeBtn.title = this.lang.toggle_theme || 'Theme';
+            themeBtn.onclick = async () => {
+                const order = { auto: 'light', light: 'dark', dark: 'auto' };
+                const newTheme = order[this.app.storage.theme] || 'auto';
+                await this.app.storage.setSetting('tmd_theme', newTheme);
+                this.applyChromeTheme();
+                themeBtn.innerHTML = this.themeIcon(newTheme);
+            };
+        }
 
         const settingsBtn = Utils.$el(headerActions, 'button', 'tmd-icon-btn', null, Config.icon_svg.settings);
+        settingsBtn.type = 'button';
         settingsBtn.title = this.lang.settings || 'Settings';
 
         const clearBtn = Utils.$el(headerActions, 'button', 'tmd-icon-btn danger', null, Config.icon_svg.clear);
+        clearBtn.type = 'button';
         clearBtn.title = dialogLang.clear_history || 'Clear History';
 
         const closeBtn = Utils.$el(headerActions, 'button', 'tmd-icon-btn', null, Config.icon_svg.close);
-        closeBtn.onclick = () => wrapper.remove();
+        closeBtn.type = 'button';
+        closeBtn.onclick = close;
 
         const historyContainer = Utils.$el(dialog, 'div', 'tmd-modal-content');
         const settingsContainer = Utils.$el(dialog, 'div', 'tmd-modal-settings');
+
+        this.bindSheetClose(wrapper, dialog, close);
 
         return {
             wrapper, titleEl, backBtn, settingsBtn, clearBtn,
@@ -1352,21 +1597,39 @@ class UIManager {
 
     renderHistoryCards(historyContainer, updateView) {
         const tableLang = this.lang.table || {};
+        const items = this.reversedHistory();
         const list = Utils.$el(historyContainer, 'div', 'tmd-card-list');
-        [...this.app.storage.history].reverse().forEach(item => {
-            const card = Utils.$el(list, 'div', 'tmd-card');
-            if (item.thumb) {
-                const img = Utils.$el(card, 'img', 'tmd-thumb');
-                img.src = item.thumb;
-            }
-            const body = Utils.$el(card, 'div', 'tmd-card-body');
-            Utils.$el(body, 'div', 'tmd-card-user', item.user || '-');
-            Utils.$el(body, 'div', 'tmd-card-meta', `${item.type || '-'} · ${this.formatDt(item.time)}`);
+        const moreBtn = Utils.$el(historyContainer, 'button', 'tmd-load-more', this.lang.load_more || 'Load more');
+        moreBtn.type = 'button';
+        let shown = 0;
+        const append = () => {
+            const next = Math.min(shown + 80, items.length);
+            for (let i = shown; i < next; i++) this.appendHistoryCard(list, items[i], tableLang, updateView);
+            shown = next;
+            moreBtn.style.display = shown < items.length ? 'block' : 'none';
+        };
+        moreBtn.onclick = append;
+        append();
+    }
 
-            const actions = Utils.$el(card, 'div', 'tmd-card-actions');
-            const goBtn = Utils.$el(actions, 'button', 'tmd-action-btn', tableLang.go || 'Go');
-            const delBtn = Utils.$el(actions, 'button', 'tmd-action-btn del', tableLang.del || 'Delete');
-            this.bindHistoryItemActions(goBtn, delBtn, item, updateView);
+    appendHistoryCard(list, item, tableLang, updateView) {
+        const card = Utils.$el(list, 'div', 'tmd-card');
+        card.style.cursor = 'pointer';
+        if (item.thumb) {
+            const img = Utils.$el(card, 'img', 'tmd-thumb');
+            img.src = item.thumb;
+        }
+        const body = Utils.$el(card, 'div', 'tmd-card-body');
+        Utils.$el(body, 'div', 'tmd-card-user', item.user || '-');
+        Utils.$el(body, 'div', 'tmd-card-meta', `${item.type || '-'} · ${this.formatDt(item.time)}`);
+
+        const actions = Utils.$el(card, 'div', 'tmd-card-actions');
+        const delBtn = Utils.$el(actions, 'button', 'tmd-action-btn del', tableLang.del || 'Delete');
+        delBtn.type = 'button';
+        this.bindHistoryItemActions(null, delBtn, item, updateView);
+        card.addEventListener('click', e => {
+            if (e.target.closest('button')) return;
+            window.open(`https://x.com/i/status/${item.id}`, '_blank');
         });
     }
 
@@ -1382,7 +1645,7 @@ class UIManager {
         });
 
         const tbody = Utils.$el(table, 'tbody');
-        [...this.app.storage.history].reverse().forEach(item => {
+        this.reversedHistory().forEach(item => {
             const tr = Utils.$el(tbody, 'tr');
             const tdThumb = Utils.$el(tr, 'td');
             if (item.thumb) {
@@ -1406,39 +1669,56 @@ class UIManager {
 
     bindFilenamePatternUI(settingsContainer, dialogLang, wrapper) {
         settingsContainer.textContent = '';
+        const isMobile = this.app.env.isMobile;
 
-        const top_settings_row = Utils.$el(settingsContainer, 'div', 'tmd-pattern-header');
-        top_settings_row.style.alignItems = 'center';
+        if (isMobile) {
+            const lang_row = Utils.$el(settingsContainer, 'div', 'tmd-option-row');
+            Utils.$el(lang_row, 'label', 'tmd-pattern-label', this.lang.language || 'Language');
+            const langSelect = Utils.$el(lang_row, 'select', 'tmd-lang-select tmd-option-select');
+            this.fillLangSelect(langSelect);
+            langSelect.onchange = async () => {
+                await this.app.storage.setSetting('tmd_lang', langSelect.value);
+                this.closeModal(wrapper);
+                this.showModal('settings');
+            };
 
-        const left_checkbox_group = Utils.$el(top_settings_row, 'div');
-        left_checkbox_group.style.display = 'flex';
-        left_checkbox_group.style.flexDirection = 'column';
-        left_checkbox_group.style.gap = '10px';
+            const theme_row = Utils.$el(settingsContainer, 'div', 'tmd-option-row');
+            Utils.$el(theme_row, 'label', 'tmd-pattern-label', this.lang.toggle_theme || 'Theme');
+            const themeSelect = Utils.$el(theme_row, 'select', 'tmd-option-select');
+            this.fillThemeSelect(themeSelect);
+            themeSelect.onchange = async () => {
+                await this.app.storage.setSetting('tmd_theme', themeSelect.value);
+                this.applyChromeTheme();
+            };
+        }
+
+        const top_settings_row = Utils.$el(settingsContainer, 'div', 'tmd-pattern-header tmd-settings-top');
+
+        const left_checkbox_group = Utils.$el(top_settings_row, 'div', 'tmd-checkbox-col');
 
         const save_history_label = Utils.$el(left_checkbox_group, 'label', 'tmd-checkbox-label');
-        save_history_label.style.marginBottom = '0';
         const save_history_input = Utils.$el(save_history_label, 'input');
         save_history_input.type = 'checkbox';
         save_history_input.checked = this.app.storage.saveHistoryFlag;
         Utils.$el(save_history_label, 'span', '', dialogLang.save_history || 'Remember download history');
 
+        save_history_input.onchange = () => this.app.storage.setSetting('save_history', save_history_input.checked);
+
         const auto_bookmark_label = Utils.$el(left_checkbox_group, 'label', 'tmd-checkbox-label');
-        auto_bookmark_label.style.marginBottom = '0';
         const auto_bookmark_input = Utils.$el(auto_bookmark_label, 'input');
         auto_bookmark_input.type = 'checkbox';
         auto_bookmark_input.checked = this.app.storage.autoBookmarkFlag;
         Utils.$el(auto_bookmark_label, 'span', '', dialogLang.auto_bookmark || 'Auto Bookmark');
+        auto_bookmark_input.onchange = () => this.app.storage.setSetting('auto_bookmark', auto_bookmark_input.checked);
 
-        let shortcut_input = null;
         if (!this.app.env.isMobile) {
-            const shortcut_label = Utils.$el(top_settings_row, 'div', 'tmd-pattern-label');
-            shortcut_label.style.marginBottom = '0';
+            const shortcut_label = Utils.$el(top_settings_row, 'div', 'tmd-pattern-label tmd-shortcut-row');
             shortcut_label.textContent = dialogLang.shortcut || 'Shortcut:';
-            shortcut_input = Utils.$el(shortcut_label, 'input', 'tmd-textarea');
-            shortcut_input.style.cssText = 'width: 50px; height: 32px; padding: 4px; text-align: center; margin-left: 10px; font-weight: bold; text-transform: uppercase; display: inline-block;';
+            const shortcut_input = Utils.$el(shortcut_label, 'input', 'tmd-textarea tmd-shortcut-input');
             shortcut_input.maxLength = 1;
             shortcut_input.value = this.app.storage.shortcutKey || 'D';
             shortcut_input.oninput = () => { shortcut_input.value = shortcut_input.value.toUpperCase(); };
+            shortcut_input.onchange = () => this.app.storage.setSetting('shortcut_key', shortcut_input.value || 'D');
         }
 
         const extra_options = Utils.$el(settingsContainer, 'div', 'tmd-extra-options');
@@ -1446,37 +1726,60 @@ class UIManager {
         const history_row = Utils.$el(extra_options, 'div', 'tmd-option-row');
         Utils.$el(history_row, 'label', 'tmd-pattern-label', dialogLang.history_limit || 'History limit:');
         const history_limit_select = Utils.$el(history_row, 'select', 'tmd-option-select');
-        [
-            { val: 100, txt: '100' },
-            { val: 500, txt: '500' },
-            { val: 1000, txt: '1000' },
-            { val: 0, txt: dialogLang.history_unlimited || 'Unlimited' }
-        ].forEach(opt => {
-            const el = Utils.$el(history_limit_select, 'option', '', opt.txt);
-            el.value = String(opt.val);
-            if (this.app.storage.historyLimit === opt.val) el.selected = true;
-        });
+        this.fillSelect(
+            history_limit_select,
+            StorageManager.HISTORY_LIMIT_OPTIONS.map(val => ({
+                val,
+                txt: val === 0 ? (dialogLang.history_unlimited || 'Unlimited') : String(val)
+            })),
+            this.app.storage.historyLimit
+        );
+        history_limit_select.onchange = () => this.app.storage.setSetting('history_limit', Number(history_limit_select.value));
 
-        const timeout_row = Utils.$el(extra_options, 'div', 'tmd-option-row');
-        Utils.$el(timeout_row, 'label', 'tmd-pattern-label', dialogLang.download_timeout || 'Download timeout:');
-        const timeout_select = Utils.$el(timeout_row, 'select', 'tmd-option-select');
-        [
-            { val: 30000, txt: dialogLang.timeout_30s || '30 sec' },
-            { val: 45000, txt: dialogLang.timeout_45s || '45 sec' },
-            { val: 90000, txt: dialogLang.timeout_90s || '90 sec' }
-        ].forEach(opt => {
-            const el = Utils.$el(timeout_select, 'option', '', opt.txt);
-            el.value = String(opt.val);
-            if (this.app.storage.downloadTimeoutMs === opt.val) el.selected = true;
-        });
+        if (!this.app.env.isMobile) {
+            const timeout_row = Utils.$el(extra_options, 'div', 'tmd-option-row');
+            Utils.$el(timeout_row, 'label', 'tmd-pattern-label', dialogLang.download_timeout || 'Download timeout:');
+            const timeout_select = Utils.$el(timeout_row, 'select', 'tmd-option-select');
+            const timeoutLabels = {
+                30000: dialogLang.timeout_30s || '30 sec',
+                45000: dialogLang.timeout_45s || '45 sec',
+                90000: dialogLang.timeout_90s || '90 sec'
+            };
+            this.fillSelect(
+                timeout_select,
+                StorageManager.TIMEOUT_OPTIONS.map(val => ({
+                    val,
+                    txt: timeoutLabels[val] || String(val)
+                })),
+                this.app.storage.downloadTimeoutMs
+            );
+            timeout_select.onchange = async () => {
+                await this.app.storage.setSetting('download_timeout', Number(timeout_select.value));
+                this.app.downloader.syncTimeoutFromStorage();
+            };
+        }
 
-        const pattern_header = Utils.$el(settingsContainer, 'div', 'tmd-pattern-header');
-        pattern_header.style.marginTop = '20px';
+        const clearHistoryBtn = Utils.$el(extra_options, 'button', 'tmd-btn-clear-history', dialogLang.clear_history || 'Clear History');
+        clearHistoryBtn.onclick = async () => {
+            if (confirm(dialogLang.clear_confirm || 'Clear all?')) {
+                await this.app.storage.clearHistory();
+                this.updateHistoryCount();
+            }
+        };
+
+        const pattern_header = Utils.$el(settingsContainer, 'div', 'tmd-pattern-header tmd-pattern-block');
         Utils.$el(pattern_header, 'label', 'tmd-pattern-label', dialogLang.pattern || 'File Pattern');
         const resetBtn = Utils.$el(pattern_header, 'button', 'tmd-btn-reset', dialogLang.reset || '(Reset)');
 
         const pattern_input = Utils.$el(settingsContainer, 'textarea', 'tmd-textarea');
-        const tag_container = Utils.$el(settingsContainer, 'div', 'tmd-tag-container');
+        let tag_container;
+        if (isMobile) {
+            const details = Utils.$el(settingsContainer, 'details', 'tmd-tag-details');
+            Utils.$el(details, 'summary', '', dialogLang.pattern_tags || 'Filename tags');
+            tag_container = Utils.$el(details, 'div', 'tmd-tag-container');
+        } else {
+            tag_container = Utils.$el(settingsContainer, 'div', 'tmd-tag-container');
+        }
 
         const tagsDict = dialogLang.tags || {};
         const validTagsKeys = Object.keys(tagsDict);
@@ -1491,28 +1794,34 @@ class UIManager {
                 pattern_input.selectionStart = pattern_input.selectionEnd = start + tagText.length;
                 pattern_input.focus();
                 updatePreview();
+                persistPattern();
             };
         });
 
         Utils.$el(settingsContainer, 'div', 'tmd-pattern-hint', dialogLang.pattern_hint || 'Advanced: {date-time:YYYYMMDD}, {date-time-local:…}, {full-text:50}');
 
-        const preview_title = Utils.$el(settingsContainer, 'div', 'tmd-pattern-label', dialogLang.preview || 'Preview:');
-        preview_title.style.marginTop = '15px';
+        Utils.$el(settingsContainer, 'div', 'tmd-pattern-label tmd-preview-label', dialogLang.preview || 'Preview:');
         const preview_box = Utils.$el(settingsContainer, 'div', 'tmd-preview-box');
         const preview_error = Utils.$el(settingsContainer, 'div', 'tmd-preview-error', dialogLang.empty_pattern || 'Empty');
-        const saveSettingsBtn = Utils.$el(settingsContainer, 'button', 'tmd-btn-save', dialogLang.save || 'Save');
+        const doneBtn = Utils.$el(settingsContainer, 'button', 'tmd-btn-save', dialogLang.save || dialogLang.done || 'Save');
+
+        const persistPattern = () => {
+            const val = pattern_input.value.trim();
+            if (!val) return;
+            this.app.storage.setSetting('filename', val);
+        };
 
         const updatePreview = () => {
             const val = pattern_input.value.trim();
             if (!val) {
                 preview_error.style.display = 'block';
                 preview_box.style.display = 'none';
-                saveSettingsBtn.disabled = true;
+                doneBtn.disabled = true;
                 return;
             }
             preview_error.style.display = 'none';
             preview_box.style.display = 'block';
-            saveSettingsBtn.disabled = false;
+            doneBtn.disabled = false;
 
             const mockInfo = {
                 'status-id': '20231011', 'user-name': 'Jingliu', 'user-id': 'Jingliu_love',
@@ -1521,43 +1830,31 @@ class UIManager {
                 'media-count': '2', 'index': '1'
             };
 
-            const out = val.split('\n').join('');
-            const invalid = Utils.getInvalidChars();
-            const datetime = Utils.extractDateTimeFormat(out, invalid);
-
+            const { out, datetime, textLength } = Utils.resolvePatternMeta(val);
             mockInfo['date-time'] = Utils.formatDate(Date.now(), datetime);
             mockInfo['date-time-local'] = Utils.formatDate(Date.now(), datetime, true);
-
-            const textLength = Utils.extractFullTextLength(out);
             mockInfo['full-text'] = 'This is a sample tweet text preview.'.substring(0, textLength);
 
-            const indexSuffix = (!out.includes('{index}') && !out.includes('{file-name}')) ? '-1' : '';
+            const indexSuffix = Utils.indexSuffixFor(out, { multiOrIndex: true, mediaIndex: 1 });
             preview_box.textContent = Utils.buildFilename(out, mockInfo, { indexSuffix, literalExt: 'jpg' });
         };
 
         resetBtn.onclick = () => {
             pattern_input.value = Config.defaultFilename;
             updatePreview();
+            persistPattern();
         };
 
-        pattern_input.addEventListener('input', updatePreview);
+        pattern_input.addEventListener('input', () => {
+            updatePreview();
+            persistPattern();
+        });
         pattern_input.value = this.app.storage.filenamePattern || Config.defaultFilename;
         updatePreview();
 
-        saveSettingsBtn.onclick = async () => {
-            await this.app.storage.setSetting('save_history', save_history_input.checked);
-            await this.app.storage.setSetting('auto_bookmark', auto_bookmark_input.checked);
-            await this.app.storage.setSetting('filename', pattern_input.value);
-            await this.app.storage.setSetting('history_limit', Number(history_limit_select.value));
-            await this.app.storage.setSetting('download_timeout', Number(timeout_select.value));
-            if (shortcut_input) {
-                await this.app.storage.setSetting('shortcut_key', shortcut_input.value);
-            }
-            this.app.downloader.syncTimeoutFromStorage();
-            saveSettingsBtn.textContent = this.lang.saved || 'Saved';
-            saveSettingsBtn.classList.add('saved');
-            saveSettingsBtn.disabled = true;
-            setTimeout(() => wrapper.remove(), 200);
+        doneBtn.onclick = () => {
+            Utils.showToast(this.lang.saved || 'Saved');
+            this.closeModal(wrapper);
         };
     }
 
@@ -1569,14 +1866,21 @@ class UIManager {
     }
 
     addButtonsToArticle(article) {
-        if (!article || this.processedArticles.has(article)) return;
-        this.processedArticles.add(article);
-
-        let retweeter_name = '';
-        let retweeter_id = '';
+        if (!article) return;
 
         const statusLink = article.querySelector('a[href*="/status/"]');
         const status_id = statusLink ? this.extractStatusId(statusLink.href) : null;
+        const boundId = article.dataset.tmdStatus;
+
+        if (boundId && status_id && boundId !== status_id) {
+            article.querySelectorAll('.tmd-down').forEach(el => el.remove());
+            delete article.dataset.tmdStatus;
+        }
+
+        if (!status_id) return;
+
+        let retweeter_name = '';
+        let retweeter_id = '';
 
         const media = article.querySelector(['a[href*="/photo/1"]', 'div[role="progressbar"]', 'button[data-testid="playButton"]', 'a[href="/settings/content_you_see"]', 'div.media-image-container', 'div.media-preview-container', 'div[aria-labelledby]>div:first-child>div[role="button"][tabindex="0"]'].join(','));
         if (media) {
@@ -1589,8 +1893,9 @@ class UIManager {
                 retweeter_id = href ? href.replace('/', '') : '';
             }
 
+            const hasToolbar = article.querySelector('.tmd-down:not(.tmd-img):not(.tmd-media)');
             const group = article.querySelector('div[role="group"]:last-of-type, ul.tweet-actions, ul.tweet-detail-actions');
-            if (status_id && group) {
+            if (!hasToolbar && group) {
                 const shareCandidates = Array.from(group.querySelectorAll(':scope>div>div, li.tweet-action-item>a, li.tweet-detail-action-item>a'));
                 const lastShare = shareCandidates.pop();
                 if (lastShare && lastShare.parentNode) {
@@ -1601,38 +1906,80 @@ class UIManager {
                     const svg = btn_down.querySelector('svg');
                     if (svg) svg.innerHTML = Config.svg;
 
-                    const is_exist = this.app.storage.isDownloaded(status_id);
+                    const { css, title } = this.downloadBtnState(status_id);
                     btn_down.classList.add('tmd-down');
-                    this.setButtonStatus(btn_down, is_exist ? 'exist' : 'download', is_exist ? this.lang.completed : this.lang.download);
+                    this.setButtonStatus(btn_down, css, title);
 
                     btn_share.parentNode.insertBefore(btn_down, btn_share.nextSibling);
                     btn_down.onclick = (e) => {
                         e && e.preventDefault && e.preventDefault();
                         e && e.stopPropagation && e.stopPropagation();
                         this.app.handleDownloadClick(btn_down, status_id, null, retweeter_name, retweeter_id);
-                        this.tryClickBookmark(article);
+                        this.tryClickBookmark(article, status_id);
                     };
+                    article.dataset.tmdStatus = status_id;
                 }
             }
         }
 
         const imgs = article.querySelectorAll('a[href*="/photo/"]');
-        if (imgs.length > 1) {
-            if (!status_id) return;
-
+        if (imgs.length > 1 && article.closest('[role="dialog"]')) {
             imgs.forEach(img => {
+                if (img.parentNode.querySelector('.tmd-img')) return;
                 const index = img.href.split('/status/').pop().split('/').pop();
-                const btn_down = this.createMediaDownloadBtn('tmd-img', 'download', this.lang.download);
+                const { css, title } = this.downloadBtnState(status_id);
+                const btn_down = this.createMediaDownloadBtn('tmd-img', css, title);
                 img.parentNode.appendChild(btn_down);
 
                 btn_down.onclick = e => {
                     e.preventDefault();
                     e.stopPropagation();
                     this.app.handleDownloadClick(btn_down, status_id, index, retweeter_name, retweeter_id);
-                    this.tryClickBookmark(article);
+                    this.tryClickBookmark(article, status_id);
                 };
+                article.dataset.tmdStatus = status_id;
             });
         }
+    }
+
+    isDialogish(node) {
+        if (!node || node.nodeType !== 1) return false;
+        if (node.getAttribute && node.getAttribute('role') === 'dialog') return true;
+        if (node.closest && node.closest('[role="dialog"]')) return true;
+        return !!(node.querySelector && node.querySelector('[role="dialog"]'));
+    }
+
+    addLightboxButtons(root) {
+        if (!root || !root.querySelectorAll) return;
+        const dialogs = [];
+        if (root.getAttribute && root.getAttribute('role') === 'dialog') dialogs.push(root);
+        if (root.closest) {
+            const d = root.closest('[role="dialog"]');
+            if (d && dialogs.indexOf(d) < 0) dialogs.push(d);
+        }
+        root.querySelectorAll('[role="dialog"]').forEach(d => {
+            if (dialogs.indexOf(d) < 0) dialogs.push(d);
+        });
+        dialogs.forEach(dialog => {
+            dialog.querySelectorAll('article').forEach(a => this.addButtonsToArticle(a));
+            const items = dialog.querySelectorAll('li[role="listitem"]');
+            if (items.length) this.addButtonsToMediaList(Array.from(items));
+            dialog.querySelectorAll('a[href*="/status/"][href*="/photo/"]').forEach(a => {
+                if (!a.parentNode || a.parentNode.querySelector('.tmd-img')) return;
+                const status_id = this.extractStatusId(a.href);
+                if (!status_id) return;
+                const index = a.href.split('/status/').pop().split('/').pop();
+                const { css, title } = this.downloadBtnState(status_id);
+                const btn_down = this.createMediaDownloadBtn('tmd-img', css, title);
+                a.parentNode.appendChild(btn_down);
+                btn_down.onclick = e => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.app.handleDownloadClick(btn_down, status_id, index);
+                    this.tryClickBookmark(dialog, status_id);
+                };
+            });
+        });
     }
 
     addButtonsToMediaList(listitems) {
@@ -1645,12 +1992,8 @@ class UIManager {
             const status_id = this.extractStatusId(statusLink.href);
             if (!status_id) return;
 
-            const is_exist = this.app.storage.isDownloaded(status_id);
-            const btn_down = this.createMediaDownloadBtn(
-                'tmd-media',
-                is_exist ? 'exist' : 'download',
-                is_exist ? this.lang.completed : this.lang.download
-            );
+            const { css, title } = this.downloadBtnState(status_id);
+            const btn_down = this.createMediaDownloadBtn('tmd-media', css, title);
 
             li.appendChild(btn_down);
             btn_down.onclick = (e) => {
@@ -1669,6 +2012,7 @@ class TwitterMediaDownloaderApp {
         this.downloader = new Downloader(this.env, this.storage);
         this.queue = new DownloadQueue(this.env, this.downloader);
         this.ui = new UIManager(this);
+        this.hoveredContainer = null;
         this._pendingNodes = new Set();
         this._flushScheduled = false;
     }
@@ -1683,13 +2027,14 @@ class TwitterMediaDownloaderApp {
         if (!this.env.isMobile) {
             document.addEventListener('mouseover', e => {
                 let container = e.target.closest('article') || e.target.closest('[role="dialog"]') || e.target.closest('div[aria-labelledby]');
-                if (container) window.tmdHoveredContainer = container;
+                if (container) this.hoveredContainer = container;
             });
 
             document.addEventListener('keydown', e => {
-                if (['INPUT', 'TEXTAREA'].includes(e.target.tagName) || e.target.isContentEditable) return;
+                if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) || e.target.isContentEditable) return;
+                if (document.querySelector('.tmd-modal-wrapper')) return;
                 if (this.storage.shortcutKey && e.key.toUpperCase() === this.storage.shortcutKey.toUpperCase()) {
-                    let container = window.tmdHoveredContainer;
+                    let container = this.hoveredContainer;
                     if (!container || !document.body.contains(container)) {
                         container = document.querySelector('[role="dialog"]') || document.querySelector('article');
                     }
@@ -1707,15 +2052,6 @@ class TwitterMediaDownloaderApp {
         }
 
         this.startObserver();
-
-        console.debug('[TMD] env', {
-            version: Config.VERSION,
-            isMobile: this.env.isMobile,
-            hasGMDownload: this.env.hasGMDownload,
-            maxThread: this.env.maxThread,
-            queryId: this.storage.queryId,
-            bearerCached: !!(this.storage.bearer && this.storage.bearer !== Config.AUTH_TOKEN)
-        });
     }
 
     findObserveRoot() {
@@ -1727,17 +2063,20 @@ class TwitterMediaDownloaderApp {
     startObserver() {
         const processNode = (node) => {
             if (!node || node.nodeType !== 1) return;
-            if (node.tagName === 'ARTICLE') {
-                this.ui.addButtonsToArticle(node);
-            } else {
-                const ancestor = node.closest && node.closest('article');
-                if (ancestor) this.ui.addButtonsToArticle(ancestor);
-                if (node.querySelectorAll) {
-                    node.querySelectorAll('article').forEach(a => this.ui.addButtonsToArticle(a));
-                }
+            const articleSelf = node.tagName === 'ARTICLE' ? node : (node.closest && node.closest('article'));
+            if (articleSelf) this.ui.addButtonsToArticle(articleSelf);
+            if (node.querySelectorAll) {
+                node.querySelectorAll('article').forEach(a => this.ui.addButtonsToArticle(a));
             }
-            const listitems = node.tagName === 'LI' && node.getAttribute('role') === 'listitem' && [node] || node.tagName === 'DIV' && node.querySelectorAll('li[role="listitem"]');
+
+            let listitems = null;
+            if (node.tagName === 'LI' && node.getAttribute('role') === 'listitem') {
+                listitems = [node];
+            } else if (node.tagName === 'DIV' && node.querySelectorAll) {
+                listitems = node.querySelectorAll('li[role="listitem"]');
+            }
             if (listitems && listitems.length) this.ui.addButtonsToMediaList(Array.from(listitems));
+            if (this.ui.isDialogish(node)) this.ui.addLightboxButtons(node);
         };
 
         const flush = () => {
@@ -1766,35 +2105,44 @@ class TwitterMediaDownloaderApp {
         attach(root);
 
         if (root !== document.body) {
-            const reattach = new MutationObserver(() => {
+            new MutationObserver(ms => {
                 const next = this.findObserveRoot();
                 if (next && next !== root && next !== document.body) {
                     root = next;
                     attach(root);
-                    reattach.disconnect();
                 }
-            });
-            reattach.observe(document.body, { childList: true, subtree: true });
+                ms.forEach(m => m.addedNodes.forEach(node => {
+                    if (this.ui.isDialogish(node)) schedule(node);
+                }));
+            }).observe(document.body, { childList: true, subtree: true });
         }
+        document.querySelectorAll('[role="dialog"]').forEach(d => this.ui.addLightboxButtons(d));
     }
 
     async handleDownloadClick(btn, status_id, index, retweeter_name = 'unknown', retweeter_id = 'unknown') {
         if (btn.classList.contains('loading')) return;
+        if (btn.classList.contains('exist') || btn.classList.contains('completed')) return;
         this.ui.setButtonStatus(btn, 'loading');
 
-        const out = (this.storage.filenamePattern || Config.defaultFilename).split('\n').join('');
+        const { out, invalid, datetime, textLength } = Utils.resolvePatternMeta(
+            this.storage.filenamePattern || Config.defaultFilename
+        );
 
         let tweet;
         try {
             tweet = await TwitterAPI.fetchTweetJson(status_id, this.storage);
         } catch (e) {
             const code = (e && e.code) || 'API_ERROR';
-            this.ui.setButtonStatus(btn, 'failed', this.ui.errorText(code));
+            const msg = this.ui.errorText(code);
+            this.ui.setButtonStatus(btn, 'failed', msg);
+            Utils.showToast(msg);
             return;
         }
 
         if (!tweet || !tweet.legacy) {
-            this.ui.setButtonStatus(btn, 'failed', this.ui.errorText('API_ERROR'));
+            const msg = this.ui.errorText('API_ERROR');
+            this.ui.setButtonStatus(btn, 'failed', msg);
+            Utils.showToast(msg);
             return;
         }
 
@@ -1804,10 +2152,6 @@ class TwitterMediaDownloaderApp {
             screen_name: user.screen_name || user.username || 'unknown',
             name: user.name || 'unknown'
         };
-
-        const invalid = Utils.getInvalidChars();
-        const datetime = Utils.extractDateTimeFormat(out, invalid);
-        const textLength = Utils.extractFullTextLength(out);
 
         const fullTextRaw = TweetUnwrapper.getFullText(tweet);
 
@@ -1835,7 +2179,9 @@ class TwitterMediaDownloaderApp {
         }
 
         if (medias.length === 0) {
-            this.ui.setButtonStatus(btn, 'failed', this.ui.errorText('MEDIA_NOT_FOUND'));
+            const msg = this.ui.errorText('MEDIA_NOT_FOUND');
+            this.ui.setButtonStatus(btn, 'failed', msg);
+            Utils.showToast(msg);
             return;
         }
 
@@ -1843,15 +2189,19 @@ class TwitterMediaDownloaderApp {
         let failCount = 0;
         const total = medias.length;
         const toastMsg = this.ui.lang.toast_open_url;
+        const isMobile = this.env.isMobile;
 
         const checkDone = () => {
             if (successCount + failCount < total) return;
-            if (successCount > 0) {
-                this.ui.setButtonStatus(btn, 'completed', this.ui.lang.completed);
+            const ok = isMobile ? successCount > 0 : failCount === 0;
+            if (ok) {
+                this.ui.setButtonStatus(btn, 'completed', this.ui.successTitle());
                 this.persistHistoryAfterDownload(status_id, info, medias, tweet);
-            } else {
-                this.ui.setButtonStatus(btn, 'failed', this.ui.errorText('ERROR'));
+                return;
             }
+            const msg = (!isMobile && successCount > 0) ? this.ui.errorText('PARTIAL') : this.ui.errorText('ERROR');
+            this.ui.setButtonStatus(btn, 'failed', msg);
+            Utils.showToast(msg);
         };
 
         medias.forEach((media, i) => {
@@ -1885,9 +2235,10 @@ class TwitterMediaDownloaderApp {
                 index: mediaIndex
             };
 
-            const indexSuffix = ((medias.length > 1 || index) && !out.includes('{index}') && !out.includes('{file-name}'))
-                ? ('-' + mediaIndex)
-                : '';
+            const indexSuffix = Utils.indexSuffixFor(out, {
+                multiOrIndex: medias.length > 1 || index,
+                mediaIndex
+            });
             const outName = Utils.buildFilename(out, fileInfo, { indexSuffix });
 
             const tryUrls = [mediaUrl, ...(picked.fallbacks || [])];
