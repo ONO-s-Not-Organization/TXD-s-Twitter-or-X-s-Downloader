@@ -1184,6 +1184,7 @@ class UIManager {
         this.historyBtn = null;
         this.processedListItems = new WeakSet();
         this.bookmarkedIds = new Set();
+        this._fabQuietUntil = 0;
     }
 
     injectCSS() {
@@ -1315,8 +1316,13 @@ class UIManager {
     }
 
     closeModal(wrapper) {
+        this._fabQuietUntil = Date.now() + 400;
         this.setFabVisible(true);
         if (wrapper && wrapper.parentNode) wrapper.remove();
+    }
+
+    fabIsQuiet() {
+        return Date.now() < this._fabQuietUntil;
     }
 
     clampFabPos(x, y) {
@@ -1343,7 +1349,7 @@ class UIManager {
 
     bindFabDrag(btn) {
         if (!this.app.env.isMobile) {
-            btn.onclick = () => this.showModal();
+            btn.onclick = () => { if (!this.fabIsQuiet()) this.showModal(); };
             return;
         }
         let startX = 0;
@@ -1381,7 +1387,7 @@ class UIManager {
                         x: parseFloat(btn.style.left),
                         y: parseFloat(btn.style.top)
                     });
-                } else {
+                } else if (!this.fabIsQuiet()) {
                     this.showModal();
                 }
             };
@@ -1500,10 +1506,14 @@ class UIManager {
         const wrapper = Utils.$el(document.body, 'div', 'tmd-modal-wrapper');
         const close = () => this.closeModal(wrapper);
         const openedAt = Date.now();
-        wrapper.onclick = (e) => {
-            if (Date.now() - openedAt < 400) return;
+        wrapper.addEventListener('click', (e) => {
+            if (Date.now() - openedAt < 400) {
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
             if (e.target === wrapper) close();
-        };
+        }, true);
 
         const dialog = Utils.$el(wrapper, 'div', 'tmd-modal-dialog');
         Utils.$el(dialog, 'div', 'tmd-sheet-handle');
