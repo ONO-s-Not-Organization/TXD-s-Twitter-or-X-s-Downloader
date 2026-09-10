@@ -33,7 +33,7 @@
 
 class Config {
     static AUTH_TOKEN = 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA';
-    static defaultFilename = '{user-name}(@{user-id})_{index}';
+    static defaultFilename = '{user-name}_@{user-id}_{status-id}';
     static HISTORY_LIMIT = 500;
     static DOWNLOAD_TIMEOUT_MS = 45000;
     static DEFAULT_QUERY_ID = '2ICDjqPd81tulZcYrtpTuQ';
@@ -501,12 +501,6 @@ class Utils {
             datetime: Utils.extractDateTimeFormat(out, invalid),
             textLength: Utils.extractFullTextLength(out)
         };
-    }
-
-    static indexSuffixFor(pattern, { multiOrIndex = false, mediaIndex = 1 } = {}) {
-        if (!multiOrIndex) return '';
-        if (pattern.includes('{index}') || pattern.includes('{file-name}')) return '';
-        return '-' + mediaIndex;
     }
 
     /**
@@ -1521,7 +1515,11 @@ class UIManager {
         const isMobile = this.app.env.isMobile;
         const wrapper = Utils.$el(document.body, 'div', 'tmd-modal-wrapper');
         const close = () => this.closeModal(wrapper);
-        wrapper.onclick = (e) => { if (e.target === wrapper) close(); };
+        const openedAt = Date.now();
+        wrapper.onclick = (e) => {
+            if (Date.now() - openedAt < 400) return;
+            if (e.target === wrapper) close();
+        };
 
         const dialog = Utils.$el(wrapper, 'div', 'tmd-modal-dialog');
         Utils.$el(dialog, 'div', 'tmd-sheet-handle');
@@ -1829,19 +1827,18 @@ class UIManager {
             doneBtn.disabled = false;
 
             const mockInfo = {
-                'status-id': '20231011', 'user-name': 'Jingliu', 'user-id': 'Jingliu_love',
-                'rt-user-name': 'Zpang', 'rt-user-id': 'chirong726',
-                'fav-count': '999', 'file-type': 'photo', 'file-name': 'original_pic',
-                'media-count': '2', 'index': '1'
+                'status-id': '114514', 'user-name': '博麗神主', 'user-id': 'korindo',
+                'rt-user-name': '芙兰朵露', 'rt-user-id': 'Flandre',
+                'fav-count': '325', 'file-type': 'type', 'file-name': 'original_pic',
+                'media-count': '7', 'index': '1'
             };
 
             const { out, datetime, textLength } = Utils.resolvePatternMeta(val);
             mockInfo['date-time'] = Utils.formatDate(Date.now(), datetime);
             mockInfo['date-time-local'] = Utils.formatDate(Date.now(), datetime, true);
-            mockInfo['full-text'] = 'This is a sample tweet text preview.'.substring(0, textLength);
+            mockInfo['full-text'] = 'Full Text'.substring(0, textLength);
 
-            const indexSuffix = Utils.indexSuffixFor(out, { multiOrIndex: true, mediaIndex: 1 });
-            preview_box.textContent = Utils.buildFilename(out, mockInfo, { indexSuffix, literalExt: 'jpg' });
+            preview_box.textContent = Utils.buildFilename(out, mockInfo, { literalExt: 'jpg' });
         };
 
         resetBtn.onclick = () => {
@@ -1868,6 +1865,11 @@ class UIManager {
         const part = href.split('/status/')[1];
         if (!part) return null;
         return part.split(/[\/\?#]/)[0] || null;
+    }
+
+    extractMediaIndex(href) {
+        const m = (href || '').match(/\/(?:photo|video)\/(\d+)/);
+        return m ? m[1] : null;
     }
 
     addButtonsToArticle(article) {
@@ -1927,14 +1929,17 @@ class UIManager {
             }
         }
 
-        const imgs = article.querySelectorAll('a[href*="/photo/"]');
-        if (imgs.length > 1 && article.closest('[role="dialog"]')) {
+        const imgs = article.querySelectorAll('a[href*="/photo/"], a[href*="/video/"]');
+        if (imgs.length > 1) {
             imgs.forEach(img => {
-                if (img.parentNode.querySelector('.tmd-img')) return;
-                const index = img.href.split('/status/').pop().split('/').pop();
+                const parent = img.parentNode;
+                if (!parent || parent.querySelector('.tmd-img')) return;
+                const index = this.extractMediaIndex(img.href);
+                if (!index) return;
+                parent.style.position = 'relative';
                 const { css, title } = this.downloadBtnState(status_id);
                 const btn_down = this.createMediaDownloadBtn('tmd-img', css, title);
-                img.parentNode.appendChild(btn_down);
+                parent.appendChild(btn_down);
 
                 btn_down.onclick = e => {
                     e.preventDefault();
@@ -1969,11 +1974,12 @@ class UIManager {
             dialog.querySelectorAll('article').forEach(a => this.addButtonsToArticle(a));
             const items = dialog.querySelectorAll('li[role="listitem"]');
             if (items.length) this.addButtonsToMediaList(Array.from(items));
-            dialog.querySelectorAll('a[href*="/status/"][href*="/photo/"]').forEach(a => {
+            dialog.querySelectorAll('a[href*="/status/"][href*="/photo/"], a[href*="/status/"][href*="/video/"]').forEach(a => {
                 if (!a.parentNode || a.parentNode.querySelector('.tmd-img')) return;
                 const status_id = this.extractStatusId(a.href);
-                if (!status_id) return;
-                const index = a.href.split('/status/').pop().split('/').pop();
+                const index = this.extractMediaIndex(a.href);
+                if (!status_id || !index) return;
+                a.parentNode.style.position = 'relative';
                 const { css, title } = this.downloadBtnState(status_id);
                 const btn_down = this.createMediaDownloadBtn('tmd-img', css, title);
                 a.parentNode.appendChild(btn_down);
@@ -2240,11 +2246,7 @@ class TwitterMediaDownloaderApp {
                 index: mediaIndex
             };
 
-            const indexSuffix = Utils.indexSuffixFor(out, {
-                multiOrIndex: medias.length > 1 || index,
-                mediaIndex
-            });
-            const outName = Utils.buildFilename(out, fileInfo, { indexSuffix });
+            const outName = Utils.buildFilename(out, fileInfo);
 
             const tryUrls = [mediaUrl, ...(picked.fallbacks || [])];
             let urlIndex = 0;
