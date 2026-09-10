@@ -1184,8 +1184,6 @@ class UIManager {
         this.historyBtn = null;
         this.processedListItems = new WeakSet();
         this.bookmarkedIds = new Set();
-        this._scrollLocked = false;
-        this._prevOverflow = '';
     }
 
     injectCSS() {
@@ -1316,21 +1314,7 @@ class UIManager {
         if (this.historyBtn) this.historyBtn.classList.toggle('tmd-fab-hidden', !show);
     }
 
-    lockPageScroll() {
-        if (this._scrollLocked) return;
-        this._scrollLocked = true;
-        this._prevOverflow = document.body.style.overflow;
-        document.body.style.overflow = 'hidden';
-    }
-
-    unlockPageScroll() {
-        if (!this._scrollLocked) return;
-        this._scrollLocked = false;
-        document.body.style.overflow = this._prevOverflow || '';
-    }
-
     closeModal(wrapper) {
-        this.unlockPageScroll();
         this.setFabVisible(true);
         if (wrapper && wrapper.parentNode) wrapper.remove();
     }
@@ -1478,8 +1462,8 @@ class UIManager {
         let currentView = startView;
         const dialogLang = this.lang.dialog || {};
 
+        this.historyBtn?.blur();
         this.setFabVisible(false);
-        this.lockPageScroll();
         const shell = this.createModalShell(dialogLang, () => currentView);
         const { wrapper, titleEl, backBtn, settingsBtn, clearBtn, historyContainer, settingsContainer } = shell;
 
