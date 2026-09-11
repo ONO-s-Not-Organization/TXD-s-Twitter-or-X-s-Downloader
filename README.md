@@ -625,6 +625,7 @@ flowchart LR
 
 - 本仓库合成作品：**GNU Affero General Public License v3.0**（`@license AGPL-3.0`）。
 - 上游 [ShanksSU/twitter-media-downloader](https://github.com/ShanksSU/twitter-media-downloader) 原代码：**MIT**。脚本文件头注释写明：Original code remains licensed under MIT. Modifications and this combined work are licensed under AGPL-3.0.
+- 代码编写内核： **Cursor Grok 4.6**
 
 主页与支持：
 
