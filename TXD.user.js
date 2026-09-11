@@ -132,7 +132,7 @@ class Config {
             --tmd-outline: #3A3A3A; --tmd-primary: #F5F5F5; --tmd-on-primary: #1C1B1F;
             --tmd-danger: #F2B8B5; --tmd-toast-bg: #F5F5F5; --tmd-toast-fg: #1C1B1F;
         }
-        .tmd-down {margin-left: 12px; order: 99; position: relative;}
+        .tmd-down {margin-left: 12px; order: 99; position: relative; overflow: visible;}
         .tmd-down:hover > div > div > div > div {color: var(--tmd-on, #1C1B1F);}
         .tmd-down:hover > div > div > div > div > div {background-color: rgba(28, 27, 31, 0.08);}
         .tmd-down:active > div > div > div > div > div {background-color: rgba(28, 27, 31, 0.12);}
@@ -197,6 +197,7 @@ class Config {
             transform: translate(-50%, -50%);
             animation: tmd-burst-anim 500ms cubic-bezier(0.05, 0.7, 0.1, 1) forwards;
             pointer-events: none;
+            z-index: 2;
         }
         .tmd-down.exist::after { content: none; animation: none; }
         @media (prefers-reduced-motion: reduce) {
@@ -219,7 +220,6 @@ class Config {
         .tmd-mobile .tmd-down.tmd-img svg {width: 18px !important; height: 18px !important;}
         .tmd-mobile .tmd-down.tmd-img > div > div,
         .tmd-mobile .tmd-down.tmd-media > div > div {margin: 10px;}
-        .tmd-mobile .tmd-down.completed::after {display: none;}
         .tmd-toast {
             position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px) + 96px); transform: translateX(-50%);
             background: var(--tmd-toast-bg, #1C1B1F); color: var(--tmd-toast-fg, #F5F5F5);
@@ -263,13 +263,8 @@ class Config {
         .tmd-history-btn {position: fixed; left: 16px; bottom: 24px; color: var(--tmd-on, #1C1B1F); background: var(--tmd-bg, #fff); border: 1px solid var(--tmd-outline, #E6E6E6); border-radius: 16px; padding: 4px; display: flex; align-items: center; cursor: pointer; z-index: 9999; box-shadow: 0 2px 8px rgba(0,0,0,0.16); font: inherit; appearance: none; -webkit-appearance: none;}
         .tmd-history-btn.tmd-fab-hidden {display: none !important;}
         .tmd-fab-icon {width: 32px; height: 16px; margin: 0 8px; flex-shrink: 0; background-position: center; background-repeat: no-repeat; background-size: contain; background-image:url("${Config.logIconUri}");}
-        .tmd-fab-count {font-family: sans-serif; font-size: 14px; margin-right: 8px;}
-        .tmd-fab-badge {display: none;}
-        .tmd-desktop .tmd-fab-badge {display: none !important;}
         .tmd-mobile .tmd-history-btn {position: fixed; left: auto; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px) + 104px); width: 48px; height: 48px; min-width: 48px; min-height: 48px; border-radius: 50%; padding: 0; justify-content: center; touch-action: none;}
         .tmd-mobile .tmd-fab-icon {margin: 0; width: 22px; height: 22px;}
-        .tmd-mobile .tmd-fab-count {display: none;}
-        .tmd-mobile .tmd-fab-badge {position: absolute; top: -2px; right: -2px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; background: var(--tmd-danger, #B3261E); color: #fff; font-size: 10px; font-weight: bold; align-items: center; justify-content: center; line-height: 1; box-sizing: border-box;}
         .tmd-history-btn:hover {background: var(--tmd-surface, #F5F5F5);}
 
         .tmd-table-wrapper { width: 100%; overflow-x: auto; }
@@ -580,16 +575,9 @@ class StorageManager {
         this.historyIds = new Set(this.history.map(item => item.id).filter(Boolean));
     }
 
-    static normalizeHistoryLimit(value) {
+    static pickOption(value, options, fallback) {
         const n = Number(value);
-        if (StorageManager.HISTORY_LIMIT_OPTIONS.includes(n)) return n;
-        return Config.HISTORY_LIMIT;
-    }
-
-    static normalizeTimeout(value) {
-        const n = Number(value);
-        if (StorageManager.TIMEOUT_OPTIONS.includes(n)) return n;
-        return Config.DOWNLOAD_TIMEOUT_MS;
+        return options.includes(n) ? n : fallback;
     }
 
     async init() {
@@ -629,8 +617,8 @@ class StorageManager {
         this.shortcutKey = shortcutKey;
         this.theme = (theme === 'light' || theme === 'dark' || theme === 'auto') ? theme : 'auto';
         this.lang = (storedLang === 'auto' || storedLang === 'en' || storedLang === 'zh') ? storedLang : 'auto';
-        this.historyLimit = StorageManager.normalizeHistoryLimit(historyLimit);
-        this.downloadTimeoutMs = StorageManager.normalizeTimeout(downloadTimeoutMs);
+        this.historyLimit = StorageManager.pickOption(historyLimit, StorageManager.HISTORY_LIMIT_OPTIONS, Config.HISTORY_LIMIT);
+        this.downloadTimeoutMs = StorageManager.pickOption(downloadTimeoutMs, StorageManager.TIMEOUT_OPTIONS, Config.DOWNLOAD_TIMEOUT_MS);
         this.fabPos = (fabPos && typeof fabPos.x === 'number' && typeof fabPos.y === 'number') ? fabPos : null;
         this.queryId = queryId;
         this.bearer = bearer;
@@ -638,8 +626,8 @@ class StorageManager {
 
     async setSetting(key, value) {
         let next = value;
-        if (key === 'history_limit') next = StorageManager.normalizeHistoryLimit(value);
-        else if (key === 'download_timeout') next = StorageManager.normalizeTimeout(value);
+        if (key === 'history_limit') next = StorageManager.pickOption(value, StorageManager.HISTORY_LIMIT_OPTIONS, Config.HISTORY_LIMIT);
+        else if (key === 'download_timeout') next = StorageManager.pickOption(value, StorageManager.TIMEOUT_OPTIONS, Config.DOWNLOAD_TIMEOUT_MS);
         await StorageCompat.setVal(key, next);
         const field = StorageManager.SETTING_FIELDS[key];
         if (field) this[field] = next;
@@ -708,7 +696,8 @@ class QueryIdResolver {
             if (typeof origFetch === 'function') {
                 window.fetch = function (input, init) {
                     const url = typeof input === 'string' ? input : (input && input.url);
-                    capture(url, init && init.headers);
+                    const headers = (init && init.headers) || (input && input.headers);
+                    capture(url, headers);
                     return origFetch.apply(this, arguments);
                 };
             }
@@ -917,6 +906,8 @@ class TwitterAPI {
         "view_counts_everywhere_api_enabled": true
     };
 
+    static FEATURES_QS = JSON.stringify(this.FEATURES);
+
     static async fetchTweetJson(status_id, storage, forceRefresh = false) {
         const cookies = Utils.getCookie();
         const queryId = await QueryIdResolver.resolve(storage, forceRefresh);
@@ -935,7 +926,7 @@ class TwitterAPI {
             withBirdwatchNotes: true,
             withVoice: true,
             withV2Timeline: true
-        })}&features=${JSON.stringify(TwitterAPI.FEATURES)}`);
+        })}&features=${TwitterAPI.FEATURES_QS}`);
 
         const headers = {
             'authorization': bearer,
@@ -993,12 +984,8 @@ class Downloader {
         this.timeout_ms = (storage && storage.downloadTimeoutMs) || Config.DOWNLOAD_TIMEOUT_MS;
     }
 
-    syncTimeoutFromStorage() {
-        if (this.storage) this.timeout_ms = this.storage.downloadTimeoutMs || Config.DOWNLOAD_TIMEOUT_MS;
-    }
-
     async download(task) {
-        this.syncTimeoutFromStorage();
+        this.timeout_ms = (this.storage && this.storage.downloadTimeoutMs) || Config.DOWNLOAD_TIMEOUT_MS;
         const isVideo = !!task.isVideo || /\.(mp4|m3u8)(\?|$)/i.test(task.url || '');
         if (this.env.hasGMDownload) {
             const gmResult = await this.viaGM(task);
@@ -1150,23 +1137,27 @@ class DownloadQueue {
     }
 
     async run(task) {
+        const urls = (task.urls && task.urls.length) ? task.urls : [task.url];
         let lastError = null;
         const maxAttempt = this.isMobile ? 0 : 2;
-        for (let attempt = 0; attempt <= maxAttempt; attempt++) {
-            task.retry = attempt;
-            try {
-                const result = await this.downloader.download(task);
-                if (result && result.ok) {
-                    try {
-                        task.onload && task.onload();
-                    } catch (e) {
-                        /* ignore */
+        for (const url of urls) {
+            task.url = url;
+            for (let attempt = 0; attempt <= maxAttempt; attempt++) {
+                task.retry = attempt;
+                try {
+                    const result = await this.downloader.download(task);
+                    if (result && result.ok) {
+                        try {
+                            task.onload && task.onload();
+                        } catch (e) {
+                            /* ignore */
+                        }
+                        return;
                     }
-                    return;
+                    lastError = result && result.error;
+                } catch (e) {
+                    lastError = e;
                 }
-                lastError = result && result.error;
-            } catch (e) {
-                lastError = e;
             }
         }
         try {
@@ -1182,7 +1173,6 @@ class UIManager {
         this.app = app;
         this.lang = this.getLang();
         this.historyBtn = null;
-        this.processedListItems = new WeakSet();
         this.bookmarkedIds = new Set();
         this._fabQuietUntil = 0;
     }
@@ -1232,6 +1222,7 @@ class UIManager {
     setButtonStatus(btn, css, title) {
         if (css) {
             btn.classList.remove('download', 'completed', 'exist', 'loading', 'failed');
+            if (css === 'completed') void btn.offsetWidth;
             btn.classList.add(css);
         }
         if (title) btn.title = title;
@@ -1281,6 +1272,30 @@ class UIManager {
         return btn_down;
     }
 
+    wireDownloadBtn(btn, { statusId, index = null, article = null, retweeterName = 'unknown', retweeterId = 'unknown' }) {
+        btn.onclick = e => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.app.handleDownloadClick(btn, statusId, index, retweeterName, retweeterId);
+            if (article) this.tryClickBookmark(article, statusId);
+        };
+    }
+
+    attachImgOverlay(parent, statusId, index, article, retweeterName, retweeterId) {
+        parent.style.position = 'relative';
+        const { css, title } = this.downloadBtnState(statusId);
+        const btn = this.createMediaDownloadBtn('tmd-img', css, title);
+        parent.appendChild(btn);
+        this.wireDownloadBtn(btn, { statusId, index, article, retweeterName, retweeterId });
+    }
+
+    async confirmClearHistory() {
+        const msg = (this.lang.dialog && this.lang.dialog.clear_confirm) || 'Clear all?';
+        if (!confirm(msg)) return false;
+        await this.app.storage.clearHistory();
+        return true;
+    }
+
     bindHistoryItemActions(goBtn, delBtn, item, updateView) {
         if (goBtn) {
             goBtn.onclick = () => window.open(`https://x.com/i/status/${item.id}`, '_blank');
@@ -1289,26 +1304,8 @@ class UIManager {
             const msg = (this.lang.dialog && this.lang.dialog.del_confirm) || 'Delete this record?';
             if (!confirm(msg)) return;
             await this.app.storage.removeHistory(item.id);
-            this.updateHistoryCount();
             updateView();
         };
-    }
-
-    historyCountText() {
-        const n = this.app.storage.history.length;
-        return n > 99 ? '99+' : String(n);
-    }
-
-    updateHistoryCount() {
-        if (!this.historyBtn) return;
-        const n = this.app.storage.history.length;
-        const count = this.historyBtn.querySelector('.tmd-fab-count');
-        const badge = this.historyBtn.querySelector('.tmd-fab-badge');
-        if (count) count.textContent = String(n);
-        if (badge) {
-            badge.textContent = this.historyCountText();
-            badge.style.display = n ? 'flex' : 'none';
-        }
     }
 
     setFabVisible(show) {
@@ -1407,11 +1404,18 @@ class UIManager {
                 try { el.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
                 const move = ev => {
                     if (ev.clientY - y0 > 80) {
-                        el.removeEventListener('pointermove', move);
+                        cleanup();
                         close();
                     }
                 };
+                const cleanup = () => {
+                    el.removeEventListener('pointermove', move);
+                    el.removeEventListener('pointerup', cleanup);
+                    el.removeEventListener('pointercancel', cleanup);
+                };
                 el.addEventListener('pointermove', move);
+                el.addEventListener('pointerup', cleanup);
+                el.addEventListener('pointercancel', cleanup);
             });
         });
     }
@@ -1446,9 +1450,6 @@ class UIManager {
         this.historyBtn.title = this.lang.history;
         this.historyBtn.classList.add('tmd-history-btn');
         Utils.$el(this.historyBtn, 'span', 'tmd-fab-icon');
-        Utils.$el(this.historyBtn, 'span', 'tmd-fab-count', String(this.app.storage.history.length));
-        const badge = Utils.$el(this.historyBtn, 'span', 'tmd-fab-badge', this.historyCountText());
-        if (this.app.storage.history.length) badge.style.display = 'flex';
         document.body.appendChild(this.historyBtn);
         this.applyFabPosition();
         this.bindFabDrag(this.historyBtn);
@@ -1489,11 +1490,7 @@ class UIManager {
         };
 
         clearBtn.onclick = async () => {
-            if (confirm(dialogLang.clear_confirm || 'Clear all?')) {
-                await this.app.storage.clearHistory();
-                this.updateHistoryCount();
-                updateView();
-            }
+            if (await this.confirmClearHistory()) updateView();
         };
 
         settingsBtn.onclick = () => { currentView = 'settings'; updateView(); };
@@ -1632,6 +1629,7 @@ class UIManager {
 
     renderHistoryTable(historyContainer, updateView) {
         const tableLang = this.lang.table || {};
+        const items = this.reversedHistory();
         const tableWrap = Utils.$el(historyContainer, 'div', 'tmd-table-wrapper');
         const table = Utils.$el(tableWrap, 'table', 'tmd-table');
         const thead = Utils.$el(table, 'thead');
@@ -1642,26 +1640,38 @@ class UIManager {
         });
 
         const tbody = Utils.$el(table, 'tbody');
-        this.reversedHistory().forEach(item => {
-            const tr = Utils.$el(tbody, 'tr');
-            const tdThumb = Utils.$el(tr, 'td');
-            if (item.thumb) {
-                const img = Utils.$el(tdThumb, 'img', 'tmd-thumb');
-                img.src = item.thumb;
-            } else {
-                tdThumb.textContent = '-';
-            }
+        const moreBtn = Utils.$el(historyContainer, 'button', 'tmd-load-more', this.lang.load_more || 'Load more');
+        moreBtn.type = 'button';
+        let shown = 0;
+        const append = () => {
+            const next = Math.min(shown + 80, items.length);
+            for (let i = shown; i < next; i++) this.appendHistoryRow(tbody, items[i], tableLang, updateView);
+            shown = next;
+            moreBtn.style.display = shown < items.length ? 'block' : 'none';
+        };
+        moreBtn.onclick = append;
+        append();
+    }
 
-            Utils.$el(tr, 'td', '', item.user || '-');
-            Utils.$el(tr, 'td', '', item.type || '-');
-            Utils.$el(tr, 'td', '', this.formatDt(item.postTime));
-            Utils.$el(tr, 'td', '', this.formatDt(item.time));
+    appendHistoryRow(tbody, item, tableLang, updateView) {
+        const tr = Utils.$el(tbody, 'tr');
+        const tdThumb = Utils.$el(tr, 'td');
+        if (item.thumb) {
+            const img = Utils.$el(tdThumb, 'img', 'tmd-thumb');
+            img.src = item.thumb;
+        } else {
+            tdThumb.textContent = '-';
+        }
 
-            const tdAction = Utils.$el(tr, 'td');
-            const goBtn = Utils.$el(tdAction, 'button', 'tmd-action-btn', tableLang.go || 'Go');
-            const delBtn = Utils.$el(tdAction, 'button', 'tmd-action-btn del', tableLang.del || 'Delete');
-            this.bindHistoryItemActions(goBtn, delBtn, item, updateView);
-        });
+        Utils.$el(tr, 'td', '', item.user || '-');
+        Utils.$el(tr, 'td', '', item.type || '-');
+        Utils.$el(tr, 'td', '', this.formatDt(item.postTime));
+        Utils.$el(tr, 'td', '', this.formatDt(item.time));
+
+        const tdAction = Utils.$el(tr, 'td');
+        const goBtn = Utils.$el(tdAction, 'button', 'tmd-action-btn', tableLang.go || 'Go');
+        const delBtn = Utils.$el(tdAction, 'button', 'tmd-action-btn del', tableLang.del || 'Delete');
+        this.bindHistoryItemActions(goBtn, delBtn, item, updateView);
     }
 
     bindFilenamePatternUI(settingsContainer, dialogLang, wrapper) {
@@ -1750,19 +1760,11 @@ class UIManager {
                 })),
                 this.app.storage.downloadTimeoutMs
             );
-            timeout_select.onchange = async () => {
-                await this.app.storage.setSetting('download_timeout', Number(timeout_select.value));
-                this.app.downloader.syncTimeoutFromStorage();
-            };
+            timeout_select.onchange = () => this.app.storage.setSetting('download_timeout', Number(timeout_select.value));
         }
 
         const clearHistoryBtn = Utils.$el(extra_options, 'button', 'tmd-btn-clear-history', dialogLang.clear_history || 'Clear History');
-        clearHistoryBtn.onclick = async () => {
-            if (confirm(dialogLang.clear_confirm || 'Clear all?')) {
-                await this.app.storage.clearHistory();
-                this.updateHistoryCount();
-            }
-        };
+        clearHistoryBtn.onclick = () => this.confirmClearHistory();
 
         const pattern_header = Utils.$el(settingsContainer, 'div', 'tmd-pattern-header tmd-pattern-block');
         Utils.$el(pattern_header, 'label', 'tmd-pattern-label', dialogLang.pattern || 'File Pattern');
@@ -1912,12 +1914,9 @@ class UIManager {
                     this.setButtonStatus(btn_down, css, title);
 
                     btn_share.parentNode.insertBefore(btn_down, btn_share.nextSibling);
-                    btn_down.onclick = (e) => {
-                        e && e.preventDefault && e.preventDefault();
-                        e && e.stopPropagation && e.stopPropagation();
-                        this.app.handleDownloadClick(btn_down, status_id, null, retweeter_name, retweeter_id);
-                        this.tryClickBookmark(article, status_id);
-                    };
+                    this.wireDownloadBtn(btn_down, {
+                        statusId: status_id, article, retweeterName: retweeter_name, retweeterId: retweeter_id
+                    });
                     article.dataset.tmdStatus = status_id;
                 }
             }
@@ -1930,17 +1929,7 @@ class UIManager {
                 if (!parent || parent.querySelector('.tmd-img')) return;
                 const index = this.extractMediaIndex(img.href);
                 if (!index) return;
-                parent.style.position = 'relative';
-                const { css, title } = this.downloadBtnState(status_id);
-                const btn_down = this.createMediaDownloadBtn('tmd-img', css, title);
-                parent.appendChild(btn_down);
-
-                btn_down.onclick = e => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    this.app.handleDownloadClick(btn_down, status_id, index, retweeter_name, retweeter_id);
-                    this.tryClickBookmark(article, status_id);
-                };
+                this.attachImgOverlay(parent, status_id, index, article, retweeter_name, retweeter_id);
                 article.dataset.tmdStatus = status_id;
             });
         }
@@ -1955,15 +1944,13 @@ class UIManager {
 
     addLightboxButtons(root) {
         if (!root || !root.querySelectorAll) return;
-        const dialogs = [];
-        if (root.getAttribute && root.getAttribute('role') === 'dialog') dialogs.push(root);
+        const dialogs = new Set();
+        if (root.getAttribute && root.getAttribute('role') === 'dialog') dialogs.add(root);
         if (root.closest) {
             const d = root.closest('[role="dialog"]');
-            if (d && dialogs.indexOf(d) < 0) dialogs.push(d);
+            if (d) dialogs.add(d);
         }
-        root.querySelectorAll('[role="dialog"]').forEach(d => {
-            if (dialogs.indexOf(d) < 0) dialogs.push(d);
-        });
+        root.querySelectorAll('[role="dialog"]').forEach(d => dialogs.add(d));
         dialogs.forEach(dialog => {
             dialog.querySelectorAll('article').forEach(a => this.addButtonsToArticle(a));
             const items = dialog.querySelectorAll('li[role="listitem"]');
@@ -1973,39 +1960,31 @@ class UIManager {
                 const status_id = this.extractStatusId(a.href);
                 const index = this.extractMediaIndex(a.href);
                 if (!status_id || !index) return;
-                a.parentNode.style.position = 'relative';
-                const { css, title } = this.downloadBtnState(status_id);
-                const btn_down = this.createMediaDownloadBtn('tmd-img', css, title);
-                a.parentNode.appendChild(btn_down);
-                btn_down.onclick = e => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    this.app.handleDownloadClick(btn_down, status_id, index);
-                    this.tryClickBookmark(dialog, status_id);
-                };
+                this.attachImgOverlay(a.parentNode, status_id, index, dialog);
             });
         });
     }
 
     addButtonsToMediaList(listitems) {
         listitems.forEach(li => {
-            if (!li || this.processedListItems.has(li)) return;
+            if (!li) return;
             const statusLink = li.querySelector('a[href*="/status/"]');
             if (!statusLink || !statusLink.href) return;
-            this.processedListItems.add(li);
 
             const status_id = this.extractStatusId(statusLink.href);
             if (!status_id) return;
+
+            if (li.dataset.tmdStatus === status_id && li.querySelector('.tmd-down')) return;
+            if (li.dataset.tmdStatus && li.dataset.tmdStatus !== status_id) {
+                li.querySelectorAll('.tmd-down').forEach(el => el.remove());
+            }
 
             const { css, title } = this.downloadBtnState(status_id);
             const btn_down = this.createMediaDownloadBtn('tmd-media', css, title);
 
             li.appendChild(btn_down);
-            btn_down.onclick = (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                this.app.handleDownloadClick(btn_down, status_id, null);
-            };
+            this.wireDownloadBtn(btn_down, { statusId: status_id });
+            li.dataset.tmdStatus = status_id;
         });
     }
 }
@@ -2069,9 +2048,10 @@ class TwitterMediaDownloaderApp {
         const processNode = (node) => {
             if (!node || node.nodeType !== 1) return;
             const articleSelf = node.tagName === 'ARTICLE' ? node : (node.closest && node.closest('article'));
-            if (articleSelf) this.ui.addButtonsToArticle(articleSelf);
-            if (node.querySelectorAll) {
-                node.querySelectorAll('article').forEach(a => this.ui.addButtonsToArticle(a));
+            if (articleSelf) {
+                this.ui.addButtonsToArticle(articleSelf);
+            } else if (node.querySelectorAll) {
+                node.querySelectorAll('article:not([data-tmd-status])').forEach(a => this.ui.addButtonsToArticle(a));
             }
 
             let listitems = null;
@@ -2099,11 +2079,17 @@ class TwitterMediaDownloaderApp {
             }
         };
 
+        let rootObserver = null;
         const attach = (root) => {
-            new MutationObserver(ms => {
+            if (rootObserver) {
+                rootObserver.disconnect();
+                rootObserver = null;
+            }
+            rootObserver = new MutationObserver(ms => {
                 ms.forEach(m => m.addedNodes.forEach(node => schedule(node)));
-            }).observe(root, { childList: true, subtree: true });
-            root.querySelectorAll && root.querySelectorAll('article').forEach(a => this.ui.addButtonsToArticle(a));
+            });
+            rootObserver.observe(root, { childList: true, subtree: true });
+            root.querySelectorAll && root.querySelectorAll('article:not([data-tmd-status])').forEach(a => this.ui.addButtonsToArticle(a));
         };
 
         let root = this.findObserveRoot();
@@ -2129,6 +2115,12 @@ class TwitterMediaDownloaderApp {
         if (btn.classList.contains('exist') || btn.classList.contains('completed')) return;
         this.ui.setButtonStatus(btn, 'loading');
 
+        const fail = (code) => {
+            const msg = this.ui.errorText(code);
+            this.ui.setButtonStatus(btn, 'failed', msg);
+            Utils.showToast(msg);
+        };
+
         const { out, invalid, datetime, textLength } = Utils.resolvePatternMeta(
             this.storage.filenamePattern || Config.defaultFilename
         );
@@ -2137,17 +2129,7 @@ class TwitterMediaDownloaderApp {
         try {
             tweet = await TwitterAPI.fetchTweetJson(status_id, this.storage);
         } catch (e) {
-            const code = (e && e.code) || 'API_ERROR';
-            const msg = this.ui.errorText(code);
-            this.ui.setButtonStatus(btn, 'failed', msg);
-            Utils.showToast(msg);
-            return;
-        }
-
-        if (!tweet || !tweet.legacy) {
-            const msg = this.ui.errorText('API_ERROR');
-            this.ui.setButtonStatus(btn, 'failed', msg);
-            Utils.showToast(msg);
+            fail((e && e.code) || 'API_ERROR');
             return;
         }
 
@@ -2184,9 +2166,7 @@ class TwitterMediaDownloaderApp {
         }
 
         if (medias.length === 0) {
-            const msg = this.ui.errorText('MEDIA_NOT_FOUND');
-            this.ui.setButtonStatus(btn, 'failed', msg);
-            Utils.showToast(msg);
+            fail('MEDIA_NOT_FOUND');
             return;
         }
 
@@ -2204,20 +2184,12 @@ class TwitterMediaDownloaderApp {
                 this.persistHistoryAfterDownload(status_id, info, medias, tweet);
                 return;
             }
-            const msg = (!isMobile && successCount > 0) ? this.ui.errorText('PARTIAL') : this.ui.errorText('ERROR');
-            this.ui.setButtonStatus(btn, 'failed', msg);
-            Utils.showToast(msg);
+            fail((!isMobile && successCount > 0) ? 'PARTIAL' : 'ERROR');
         };
 
         medias.forEach((media, i) => {
             const picked = TweetUnwrapper.pickMediaUrl(media);
-            if (!picked || !picked.primary) {
-                failCount++;
-                checkDone();
-                return;
-            }
-
-            if (picked.maybeHls) {
+            if (!picked?.primary || picked.maybeHls) {
                 failCount++;
                 checkDone();
                 return;
@@ -2243,45 +2215,33 @@ class TwitterMediaDownloaderApp {
             const outName = Utils.buildFilename(out, fileInfo);
 
             const tryUrls = [mediaUrl, ...(picked.fallbacks || [])];
-            let urlIndex = 0;
-
-            const enqueue = (url) => {
-                this.queue.add({
-                    url,
-                    name: outName,
-                    isVideo: !!picked.isVideo || fileType === 'video' || fileType === 'gif',
-                    toastMsg,
-                    onload: () => {
-                        successCount++;
-                        checkDone();
-                    },
-                    onerror: () => {
-                        urlIndex++;
-                        if (urlIndex < tryUrls.length) {
-                            enqueue(tryUrls[urlIndex]);
-                        } else {
-                            failCount++;
-                            checkDone();
-                        }
-                    }
-                });
-            };
-            enqueue(tryUrls[0]);
+            this.queue.add({
+                url: tryUrls[0],
+                urls: tryUrls,
+                name: outName,
+                isVideo: !!picked.isVideo || fileType === 'video' || fileType === 'gif',
+                toastMsg,
+                onload: () => {
+                    successCount++;
+                    checkDone();
+                },
+                onerror: () => {
+                    failCount++;
+                    checkDone();
+                }
+            });
         });
     }
 
     async persistHistoryAfterDownload(status_id, info, medias, tweet) {
         if (!this.storage.saveHistoryFlag) return;
-        if (this.storage.isDownloaded(status_id)) return;
-
         await this.storage.addHistory({
             id: status_id,
             user: info['user-name'],
-            type: medias.length > 1 ? 'Gallery' : info['file-type'],
+            type: medias.length > 1 ? 'Gallery' : (medias[0]?.type || 'photo').replace('animated_', ''),
             postTime: new Date(tweet.legacy.created_at).getTime(),
             thumb: medias[0]?.media_url_https ? medias[0].media_url_https + ':small' : ''
         });
-        this.ui.updateHistoryCount();
     }
 }
 
